@@ -1,4 +1,4 @@
-| OpenELF: elf.library's first code, RomTag and register stubs.
+| GFOpenELF: elf.library's first code, RomTag and register stubs.
 | Copyright (c) 2026 AmigaChrome Team. MIT.
 |
 | Each library call arrives with its arguments in registers (elf.lvo) and

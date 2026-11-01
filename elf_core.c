@@ -1,4 +1,4 @@
-/* OpenELF's loader core (elf_core.h says what it does).
+/* GFOpenELF's loader core (elf_core.h says what it does).
  * Copyright (c) 2026 AmigaChrome Team. MIT.
  *
  * Every field is read byte by byte, big-endian, so the core runs the same

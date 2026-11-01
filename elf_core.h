@@ -1,4 +1,4 @@
-/* OpenELF's loader core: 68k ELF files (objects, executables, shared
+/* GFOpenELF's loader core: 68k ELF files (objects, executables, shared
  * objects) into memory, relocated, as segments a seglist can be made of.
  * Copyright (c) 2026 AmigaChrome Team. MIT.
  *

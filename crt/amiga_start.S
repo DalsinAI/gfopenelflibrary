@@ -1,4 +1,4 @@
-| OpenELF's program start, for ELF programs (and the hunk tools built the
+| GFOpenELF's program start, for ELF programs (and the hunk tools built the
 | same way): AmigaDOS starts a program with D0 = the argument line's length,
 | A0 = the line, and SysBase at address 4; this saves SysBase and calls
 |     int amiga_main(const char *args, long len)

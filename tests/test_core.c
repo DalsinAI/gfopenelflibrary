@@ -1,4 +1,4 @@
-/* OpenELF's core under qemu-m68k: loads the fixtures tests/test_openelf.sh
+/* GFOpenELF's core under qemu-m68k: loads the fixtures tests/test_openelf.sh
  * builds with GCC and clang, runs what it loaded, and checks every refusal.
  * Copyright (c) 2026 AmigaChrome Team. MIT.
  *

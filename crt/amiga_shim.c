@@ -1,4 +1,4 @@
-/* OpenELF's few C-callable Amiga calls, for ELF programs written in
+/* GFOpenELF's few C-callable Amiga calls, for ELF programs written in
  * languages with no register calls of their own (Rust, as rust/hello uses):
  * dos.library's PutStr and numbers through VPrintf, and memory from one exec pool per program, which
  * suits Rust's allocator (it frees with the size, as FreePooled wants).
