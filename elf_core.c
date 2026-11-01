@@ -368,6 +368,7 @@ static int read_symtab(struct ld *l, oe_u32 i)
     int e;
     if (SH_LINK(s) >= l->shnum || SH_SIZE(s) % SYM_SIZE) return OE_ERR_FORMAT;
     t = shdr(l, SH_LINK(s));
+    if (SH_SIZE(t) >= 0xffffffffUL) return OE_ERR_FORMAT;    /* its size + 1 would wrap */
     l->symsec = i;
     l->nsym = SH_SIZE(s) / SYM_SIZE;
     l->strsize = SH_SIZE(t);
@@ -706,11 +707,13 @@ struct dyn {
  * tables don't fit in the block */
 static oe_u32 dyn_nsym(const struct ld *l, const struct dyn *d)
 {
-    oe_u32 bias = l->img->bias, n = 0;
+    oe_u32 bias = l->img->bias, n = 0, nb;
     if (d->hash) {
         if (!inblock(l, d->hash, 8)) return 0;
+        nb = g32(PTR(M32(d->hash + bias)));        /* nbucket */
         n = g32(PTR(M32(d->hash + bias + 4)));     /* nchain */
-        if (!inblock(l, d->hash, 8 + (g32(PTR(M32(d->hash + bias))) + n) * 4)) return 0;
+        /* 8 + (nbucket + nchain) * 4 bytes, without wrapping at 32 bits */
+        if (nb > (l->bsize - 8) / 4 || n > (l->bsize - 8) / 4 - nb || !inblock(l, d->hash, 8 + (nb + n) * 4)) return 0;
     } else if (d->gnuhash) {
         /* the GNU hash: the highest symbol any chain reaches, plus one */
         const oe_u8 *h = PTR(M32(d->gnuhash + bias)), *buckets;
