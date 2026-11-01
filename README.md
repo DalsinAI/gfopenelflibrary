@@ -1,7 +1,7 @@
-# OpenELF: elf.library
+# GFOpenELF: elf.library
 
 elf.library 1.0 loads 68k ELF programs and shared objects on AmigaOS 3.2.3
-and OpenBench, so what GCC's and LLVM's ELF toolchains build (C, C++ and
+and GFOpenBench, so what GCC's and LLVM's ELF toolchains build (C, C++ and
 Rust) runs with no conversion to the hunk format. Our own code, MIT, written
 from the System V ABI (ELF), the m68k psABI's relocation list and our own
 design, never from another loader's source (`CLEAN-ROOM.md`). The design and

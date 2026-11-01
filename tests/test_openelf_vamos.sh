@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright (c) 2026 AmigaChrome Team. MIT licence (see LICENSE).
-# OpenELF in an emulated AmigaOS: build-amiga.sh's
+# GFOpenELF in an emulated AmigaOS: build-amiga.sh's
 # elf.library (a hunk library) is opened from LIBS: by C/ElfTest under
 # amitools' vamos (68040), which loads and runs each ELF example (an
 # executable with -q, an object, a PIE, Rust when built), DLOpens

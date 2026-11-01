@@ -2,18 +2,18 @@
 
 ## Creator and maintainer
 
-- **SacredTrees** ([@SacredTrees](https://github.com/SacredTrees)): created OpenELF, designs it and maintains it.
+- **SacredTrees** ([@SacredTrees](https://github.com/SacredTrees)): created GFOpenELF, designs it and maintains it.
 
 ## The AmigaChrome team
 
-We are The AmigaChrome Team, who build OpenELF alongside SacredTrees:
+We are The AmigaChrome Team, who build GFOpenELF alongside SacredTrees:
 
 - **Agnus**, our coordinator, who keeps every thread moving.
 - **The threads**, each one taking a piece of the work from design to release.
 
 ## Copyright holder
 
-OpenELF's code (elf.library, its tools, examples and tests) and documents are
+GFOpenELF's code (elf.library, its tools, examples and tests) and documents are
 Copyright (c) 2026 AmigaChrome Team, released under the MIT licence (`LICENSE`).
 
 ## Third-party work in this repository

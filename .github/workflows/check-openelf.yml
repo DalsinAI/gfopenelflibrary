@@ -1,4 +1,4 @@
-name: OpenELF (elf.library)
+name: GFOpenELF (elf.library)
 
 # elf.library's loader core under qemu-m68k (GCC objects, -q executables,
 # PIEs, shared objects and a Rust object, loaded and run; refusals; damaged

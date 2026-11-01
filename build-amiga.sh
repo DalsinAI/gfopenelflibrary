@@ -1,5 +1,5 @@
 #!/bin/sh
-# OpenELF for the Amiga, with the m68k ELF GCC alone (gcc-m68k-linux-gnu;
+# GFOpenELF for the Amiga, with the m68k ELF GCC alone (gcc-m68k-linux-gnu;
 # no NDK, no Amiga toolchain): every piece is linked at 0 with its
 # relocations kept and the hunk ones made by tools/mkhunk.py.
 #   Libs/elf.library     the loader (a hunk file: the hunk loader loads it)
