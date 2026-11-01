@@ -47,6 +47,24 @@ static int read_file(const char *path, struct file *f)
     return 0;
 }
 
+/* the segments now allocated: a read into one must fit inside it */
+#define MAXSEGS 256
+static struct { unsigned char *at; unsigned long size; } segs[MAXSEGS];
+
+static void seg_note(void *p, unsigned long size)
+{
+    int i;
+    for (i = 0; i < MAXSEGS; i++)
+        if (!segs[i].at) { segs[i].at = p; segs[i].size = size; return; }
+}
+
+static void seg_forget(void *p)
+{
+    int i;
+    for (i = 0; i < MAXSEGS; i++)
+        if (segs[i].at == p) { segs[i].at = NULL; return; }
+}
+
 static void *t_alloc(struct oe_env *env, oe_u32 size, enum oe_mem kind)
 {
     struct tenv *t = (struct tenv *)env;
@@ -56,6 +74,7 @@ static void *t_alloc(struct oe_env *env, oe_u32 size, enum oe_mem kind)
         /* segments run: memory qemu lets us execute, cleared by mmap */
         p = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (p == MAP_FAILED) return NULL;
+        seg_note(p, size);
     } else {
         if (posix_memalign(&p, 8, size)) return NULL;
         memset(p, 0, size);
@@ -69,13 +88,22 @@ static void t_free(struct oe_env *env, void *mem, oe_u32 size, enum oe_mem kind)
 {
     struct tenv *t = (struct tenv *)env;
     t->live--;
-    if (kind == OE_MEM_SEGMENT) { t->bytes -= size; munmap(mem, size); }
+    if (kind == OE_MEM_SEGMENT) { t->bytes -= size; seg_forget(mem); munmap(mem, size); }
     else free(mem);
 }
 
 static oe_s32 t_read(struct oe_env *env, oe_u32 off, void *buf, oe_u32 len)
 {
     struct tenv *t = (struct tenv *)env;
+    unsigned char *b = buf;
+    int i;
+    for (i = 0; i < MAXSEGS; i++)
+        if (segs[i].at && b >= segs[i].at && b < segs[i].at + segs[i].size) {
+            CHECK(len <= (unsigned long)(segs[i].at + segs[i].size - b),
+                  "a read of %lu bytes into a segment with %lu left", (unsigned long)len,
+                  (unsigned long)(segs[i].at + segs[i].size - b));
+            if (len > (unsigned long)(segs[i].at + segs[i].size - b)) return -1;
+        }
     if (off > t->f.size || len > t->f.size - off) return -1;
     memcpy(buf, t->f.data + off, len);
     return 0;
@@ -255,11 +283,84 @@ static void identify(void)
     CHECK(oe_identify(ppc, sizeof ppc, &info) == OE_ERR_CLASS, "64-bit is refused");
 }
 
+static void be32(unsigned char *p, unsigned long v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
+static void be16(unsigned char *p, unsigned v) { p[0] = v >> 8; p[1] = v; }
+
+/* An object whose n sections (SHT_PROGBITS, SHF_ALLOC) have the sizes and
+ * alignments given, then a symbol table and its strings. The sections'
+ * bytes all point at the start of the file. */
+static unsigned long crafted_rel(unsigned char *f, int n, const unsigned long *size, const unsigned long *align)
+{
+    unsigned char *sh = f + 52;
+    int i, shnum = n + 3;
+    memset(f, 0, 52 + shnum * 40);
+    memcpy(f, "\177ELF\1\2\1", 7);
+    be16(f + 16, 1);            /* ET_REL */
+    be16(f + 18, 4);            /* EM_68K */
+    be32(f + 20, 1);
+    be32(f + 32, 52);           /* e_shoff */
+    be16(f + 40, 52);
+    be16(f + 46, 40);
+    be16(f + 48, shnum);
+    for (i = 1; i <= n; i++) {
+        unsigned char *s = sh + i * 40;
+        be32(s + 4, 1);         /* SHT_PROGBITS */
+        be32(s + 8, 2);         /* SHF_ALLOC */
+        be32(s + 20, size[i - 1]);
+        be32(s + 32, align[i - 1]);
+    }
+    be32(sh + (n + 1) * 40 + 4, 2);         /* SHT_SYMTAB: the null symbol */
+    be32(sh + (n + 1) * 40 + 20, 16);
+    be32(sh + (n + 1) * 40 + 24, n + 2);
+    be32(sh + (n + 2) * 40 + 4, 3);         /* SHT_STRTAB */
+    be32(sh + (n + 2) * 40 + 20, 1);
+    return 52 + shnum * 40;
+}
+
+/* Load a crafted file from memory: it must be refused with want */
+static void refuse_mem(const char *name, unsigned char *data, unsigned long size, oe_u32 seg_max, int want)
+{
+    struct tenv t;
+    struct oe_image img;
+    int e;
+    env_init(&t, ".");
+    t.env.seg_max = seg_max;
+    t.f.data = data;
+    t.f.size = size;
+    e = oe_load(&t.env, &img);
+    CHECK(e == want, "%s: %s, want %s", name, oe_strerror(e), oe_strerror(want));
+    printf("%-22s refused: %s\n", name, oe_strerror(e));
+    if (e == OE_OK) oe_unload(&t.env, &img);
+    unload_libs();
+    CHECK(t.live == 0, "%s: %ld allocations left", name, t.live);
+}
+
+/* Sections whose sizes and alignments add up past 32 bits: the layout must
+ * be refused, not wrap round to a small segment the sections are then read
+ * into */
+static void crafted(void)
+{
+    static unsigned char f[52 + 8 * 40];
+    static const unsigned long two_size[] = { 0x7ffffff8UL, 0x7ffffff8UL, 1, 8 }, two_align[] = { 1, 1, 1, 16 };
+    static const unsigned long one_size[] = { 0xfffffff1UL, 8 }, one_align[] = { 1, 16 };
+    static const unsigned long add_size[] = { 8, 0xfffffff8UL }, add_align[] = { 1, 1 };
+    unsigned long n;
+    n = crafted_rel(f, 4, two_size, two_align);
+    refuse_mem("rel-wrap-two", f, n, 0, OE_ERR_FORMAT);
+    n = crafted_rel(f, 2, one_size, one_align);
+    refuse_mem("rel-wrap-one", f, n, 0, OE_ERR_FORMAT);
+    /* split by seg_max, the big section is a segment of its own: too big */
+    refuse_mem("rel-wrap-one seg_max", f, n, 512, OE_ERR_NOMEM);
+    n = crafted_rel(f, 2, add_size, add_align);
+    refuse_mem("rel-wrap-add", f, n, 0, OE_ERR_FORMAT);
+}
+
 int main(int argc, char **argv)
 {
     const char *d = argc > 1 ? argv[1] : ".";
     setvbuf(stdout, NULL, _IONBF, 0);
     identify();
+    crafted();
     /* objects, AROS and MorphOS style: one segment, then small segments */
     run(d, "prog-gcc.o", 0, 1, 1);
     run(d, "prog-gcc.o", 256, 1, 3);
