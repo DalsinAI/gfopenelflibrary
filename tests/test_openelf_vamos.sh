@@ -27,15 +27,24 @@ so "$fx/outer.c" -L"$tmp/drawer/Libs/elf" -lgreet -o "$tmp/drawer/Libs/elf/libou
 so -DCYC_NAME=cyc_b "$fx/cyc.c" -o "$tmp/drawer/Libs/elf/libcycb.so"
 so -DCYC_NAME=cyc_a "$fx/cyc.c" -L"$tmp/drawer/Libs/elf" -lcycb -o "$tmp/drawer/Libs/elf/libcyca.so"
 so -DCYC_NAME=cyc_b "$fx/cyc.c" -L"$tmp/drawer/Libs/elf" -lcyca -o "$tmp/drawer/Libs/elf/libcycb.so"
+# a chain: libchainN.so needs libchainN+1.so, up to libchain17.so, which
+# needs nothing; from libchain1.so it is 16 needs deep, from libchain0.so 17
+n=17
+so -DCHAIN_NAME=chain_17 "$fx/chain.c" -o "$tmp/drawer/Libs/elf/libchain17.so"
+while [ "$n" -gt 0 ]; do
+    so -DCHAIN_NAME=chain_$((n - 1)) "$fx/chain.c" -L"$tmp/drawer/Libs/elf" -lchain$n -o "$tmp/drawer/Libs/elf/libchain$((n - 1)).so"
+    n=$((n - 1))
+done
 cd "$tmp/drawer"
 fail=0
+stack=
 # vamos keeps a RAM: volume under $HOME between runs, so each run gets its
 # own HOME; keep pip's per-user packages findable when HOME moves
 PYTHONUSERBASE=$(python3 -m site --user-base)
 export PYTHONUSERBASE
-run() { # want, ElfTest args...
+run() { # want, ElfTest args... (stack= vamos's stack in KiB)
     want=$1; shift
-    HOME=$tmp/home timeout 60 vamos -C 68040 -V "libs:$tmp/drawer/Libs" C/ElfTest "$@" > "$tmp/out" 2>&1 || true
+    HOME=$tmp/home timeout 60 vamos -C 68040 ${stack:+-s "$stack"} -V "libs:$tmp/drawer/Libs" C/ElfTest "$@" > "$tmp/out" 2>&1 || true
     if grep -q -- "$want" "$tmp/out"; then echo "ok   ElfTest $*"; else echo "FAIL ElfTest $* (want: $want)"; cat "$tmp/out"; fail=1; fi
 }
 for f in hello-exec hello-object hello-pie; do
@@ -51,6 +60,12 @@ run "DLClose = 0" DL ELF/libgreet.so greet_answer
 run "it returns 42" DL libouter.so greet_answer         # found through what it needs
 run "DLClose = 0" DL libouter.so greet_answer
 run "could not be loaded" DL libcyca.so cyc_a           # a cycle is refused
+# a chain 16 needs deep loads, one 17 deep is refused (with stack enough
+# for both: vamos sets no tc_SPLower, so only the depth stops it here)
+stack=64
+run "it returns 42" DL libchain1.so chain_1
+run "could not be loaded" DL libchain0.so chain_0
+stack=
 run "not an ELF file" CALL C/ElfHook
 [ "$fail" = 0 ] && echo "all passed"
 exit "$fail"

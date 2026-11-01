@@ -27,6 +27,14 @@
 #define LIB_REVISION 0
 #define SEG_MAX (32UL * 1024)   /* ET_REL: sections per segment, for fragmented memory */
 #define MAX_DEPS 16
+/* DT_NEEDED opens each object inside the load of the one that needs it,
+ * on the caller's stack (dlopen_locked, oe_load and load_once: about 1.2 KB
+ * a level, more with DOS's Open and Read under it), so a chain of needs
+ * stops at MAX_DEPTH levels, or sooner when the stack has less than
+ * NEEDED_STACK bytes left for the next one: a LoadSeg from a 4 KB Shell
+ * stack has room for few */
+#define MAX_DEPTH 16
+#define NEEDED_STACK 2048UL
 
 struct dl {
     struct dl *next;
@@ -77,6 +85,7 @@ struct fenv {
     BPTR fh;
     ULONG pos;
     struct dl *owner;           /* the shared object being loaded, for its DT_NEEDED; 0 for a program */
+    ULONG depth;                /* 0 for what the caller opened, 1 for what that needs, ... */
     int err;                    /* a nested DLOpen's error */
 };
 
@@ -118,7 +127,18 @@ static oe_u32 e_resolve(struct oe_env *env, const char *name, int *found)
     return 0;
 }
 
-static struct dl *dlopen_locked(const char *name, int *err);
+static struct dl *dlopen_locked(const char *name, ULONG depth, int *err);
+
+/* Bytes left below here on this task's stack; ~0 when the stack pointer is
+ * not on the stack Exec has for the task (we can't tell) */
+static ULONG stack_left(void)
+{
+    UBYTE *task = FindTask(0);
+    ULONG here = (ULONG)&task;
+    ULONG lower = *(ULONG *)(task + TC_SPLOWER), upper = *(ULONG *)(task + TC_SPUPPER);
+    if (here <= lower || here > upper) return 0xffffffffUL;
+    return here - lower;
+}
 
 static int e_needed(struct oe_env *env, const char *name)
 {
@@ -126,7 +146,8 @@ static int e_needed(struct oe_env *env, const char *name)
     int err = OE_OK;
     struct dl *d;
     if (f->owner && f->owner->ndeps == MAX_DEPS) return OE_ERR_NEEDED;    /* more than it can keep */
-    if (!(d = dlopen_locked(name, &err))) return err ? err : OE_ERR_NEEDED;
+    if (f->depth >= MAX_DEPTH || stack_left() < NEEDED_STACK) return OE_ERR_NEEDED;    /* too deep a chain */
+    if (!(d = dlopen_locked(name, f->depth + 1, &err))) return err ? err : OE_ERR_NEEDED;
     if (f->owner) f->owner->deps[f->owner->ndeps++] = d;
     /* a program's needs stay open: its seglist has nowhere to keep them */
     return OE_OK;
@@ -292,7 +313,7 @@ static BPTR dl_openfile(const char *name)
     return Open(name, MODE_OLDFILE);
 }
 
-static struct dl *dlopen_locked(const char *name, int *err)
+static struct dl *dlopen_locked(const char *name, ULONG depth, int *err)
 {
     struct dl *d = dl_find(name);
     struct fenv f;
@@ -307,6 +328,7 @@ static struct dl *dlopen_locked(const char *name, int *err)
     scopy(d->name, name, slen(name) + 1);
     if (!(fh = dl_openfile(name))) { FreeMem(d, size); *err = OE_ERR_NEEDED; return 0; }
     env_init(&f, fh, d);
+    f.depth = depth;
     d->refs = 1;
     d->loading = 1;
     d->next = ElfBase->dls;
@@ -337,7 +359,7 @@ ULONG L_DLOpen(CONST_STRPTR name, ULONG flags)
     (void)flags;                /* RTLD_NOW is all there is: every symbol is bound at load */
     if (!name) return 0;
     ObtainSemaphore(&ElfBase->sem);
-    d = dlopen_locked(name, &e);
+    d = dlopen_locked(name, 0, &e);
     ReleaseSemaphore(&ElfBase->sem);
     if (!d) SetIoErr(e == OE_ERR_NEEDED ? ERROR_OBJECT_NOT_FOUND : dos_error(e));
     return (ULONG)d;
