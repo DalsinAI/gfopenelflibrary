@@ -1,6 +1,6 @@
 /* What the test loader hands a loaded fixture's entry, and what every
  * fixture's checks add up to.
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #ifndef OPENELF_FIXTURE_H
 #define OPENELF_FIXTURE_H
 struct fx_api {

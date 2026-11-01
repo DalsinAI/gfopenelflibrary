@@ -1,7 +1,7 @@
 /* A fixture program: ten checks of what a loader must get right, one bit
  * each. Built as an object (gcc and clang), an object linked with ld -r,
  * an executable with its relocations (-q) and a PIE (tests/test_openelf.sh).
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "fixture.h"
 
 #ifdef WANT_EXTERN

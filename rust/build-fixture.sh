@@ -3,7 +3,7 @@
 # m68k-unknown-none-elf (68040, LLVM's m68k backend, soft float), the
 # staticlib's objects joined with ld -r and trimmed to what _start uses.
 #   sh build-fixture.sh OUTDIR      -> OUTDIR/prog-rust.o, OUTDIR/prog-rust-exec-q
-# Copyright (c) 2026 AmigaChrome Team. MIT.
+# Copyright (c) 2026 AmiCradle Team. MIT.
 set -eu
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 out=$1

@@ -1,5 +1,5 @@
 /* elf.library 1.0: its calls, for C programs and the tests.
- * Copyright (c) 2026 AmigaChrome Team. MIT.
+ * Copyright (c) 2026 AmiCradle Team. MIT.
  *
  * LVO   call                                   registers
  *  -30  BPTR  ElfLoadSeg(STRPTR name)           D1

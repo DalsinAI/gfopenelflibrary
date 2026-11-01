@@ -1,6 +1,6 @@
 /* GFOpenELF's loader core: 68k ELF files (objects, executables, shared
  * objects) into memory, relocated, as segments a seglist can be made of.
- * Copyright (c) 2026 AmigaChrome Team. MIT.
+ * Copyright (c) 2026 AmiCradle Team. MIT.
  *
  * Plain C with no Amiga headers, so the same file builds into elf.library
  * and into the tests (tests/test_openelf.sh loads real GCC and LLVM

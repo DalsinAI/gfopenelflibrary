@@ -5,7 +5,7 @@
  *                           RunCommand only runs their own seglists)
  *   ElfTest DL FILE SYMBOL  DLOpen FILE, DLSym SYMBOL, call it as int f(void)
  * Prints each step and elf.library's reason for any failure.
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "../openelf_amiga.h"
 #include "../openelf_public.h"
 

@@ -5,7 +5,7 @@ covers, so the claim matches how the work is done.
 
 ## The rule
 
-Everything in this repository is the Team's own code, MIT, Copyright AmigaChrome
+Everything in this repository is the Team's own code, MIT, Copyright AmiCradle
 Team, unless a file or `CONTRIBUTORS.md` says otherwise.
 
 **Never copied.** No code, bytes, tables, strings, comments or documentation

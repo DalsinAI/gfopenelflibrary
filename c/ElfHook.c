@@ -2,7 +2,7 @@
  * has it patch LoadSeg (hunks are still tried first).
  *   ElfHook         installs the hook (again is fine)
  *   ElfHook OFF     takes it out, when nobody patched over it
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "../openelf_amiga.h"
 #include "../openelf_public.h"
 

@@ -2,7 +2,7 @@
 // 68040, soft float) that elf.library loads. core and alloc only, the
 // allocator on one exec pool (crt/amiga_shim.c), output through
 // dos.library's PutStr.
-// Copyright (c) 2026 AmigaChrome Team. MIT.
+// Copyright (c) 2026 AmiCradle Team. MIT.
 #![no_std]
 
 extern crate alloc;

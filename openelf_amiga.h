@@ -1,7 +1,7 @@
 /* GFOpenELF: the few Exec and DOS facts elf.library uses, in our own words,
  * so it builds with any m68k ELF GCC and no NDK (CLEAN-ROOM.md: names,
  * values, offsets and registers are interface facts).
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #ifndef OPENELF_AMIGA_H
 #define OPENELF_AMIGA_H
 

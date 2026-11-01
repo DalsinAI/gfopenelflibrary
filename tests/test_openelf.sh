@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 AmigaChrome Team. MIT licence (see LICENSE).
+# Copyright (c) 2026 AmiCradle Team. MIT licence (see LICENSE).
 # GFOpenELF: the loader core under qemu-m68k. Builds the
 # fixtures with the m68k cross GCC (objects, ld -r, -q executables, a PIE,
 # shared objects with DT_NEEDED, and the files it must refuse), with clang's
