@@ -51,7 +51,9 @@ CreateProc run it). `DLOpen` finds a name with no path in `LIBS:elf/` and
 then the current directory, opens its `DT_NEEDED` first, binds every symbol
 at once (`RTLD_NOW`; every object is global) and runs its constructors.
 Objects that need each other round a cycle are refused, as is one that needs
-more than 16. `DLSym` on a handle looks in that object and then in what it
+more than 16, and a chain of needs more than 16 deep or deeper than the
+caller's stack has room for (each level takes about 1.2 KB of it, more
+with DOS's own calls). `DLSym` on a handle looks in that object and then in what it
 needs.
 OS 4.1's elf.library is an interface, not a jump table, so no 68k library
 can match it byte for byte; the DL calls keep its names and dlopen's

@@ -56,6 +56,9 @@ struct SignalSemaphore { UWORD body[23]; };
 #define LIBF_CHANGED 2
 #define LIBF_SUMUSED 4
 #define LIBF_DELEXP 8
+/* struct Task: the bounds of the task's stack (exec/tasks.h) */
+#define TC_SPLOWER 58
+#define TC_SPUPPER 62
 #define MEMF_ANY 0
 #define MEMF_PUBLIC 1
 #define MEMF_CLEAR 0x10000UL
@@ -128,6 +131,7 @@ static inline __attribute__((always_inline)) ULONG dos_call4(APTR base, int lvo,
 #define AllocMem(size, flags) ((APTR)SysCall(-198, size, flags, 0, 0))
 #define FreeMem(mem, size) SysCall(-210, size, 0, 0, mem)
 #define Remove(node) SysCall(-252, 0, 0, 0, node)
+#define FindTask(name) ((APTR)SysCall(-294, 0, 0, 0, name))
 #define CloseLibrary(lib) SysCall(-414, 0, 0, 0, lib)
 #define SetFunction(lib, off, fn) ((APTR)SysCall(-420, fn, 0, off, lib))
 #define OpenLibrary(name, ver) ((APTR)SysCall(-552, ver, 0, 0, name))
