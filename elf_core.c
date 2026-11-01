@@ -508,17 +508,21 @@ static int load_rel(struct ld *l)
             al = commalign;
         }
         if ((al & (al - 1)) || al > MAX_ALIGN) { tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32)); return OE_ERR_FORMAT; }
-        if (seg_size && l->env->seg_max && seg_size + al + sz > l->env->seg_max) {
+        /* seg_size + al + sz > seg_max, without wrapping at 32 bits */
+        if (seg_size && l->env->seg_max
+            && (al > l->env->seg_max || sz > l->env->seg_max - al || seg_size > l->env->seg_max - al - sz)) {
             off[3 * seg_used + 1] = seg_size;
             seg_used++;
             seg_size = 0;
         }
         if (al > off[3 * seg_used + 2]) off[3 * seg_used + 2] = al;
+        /* the round-up and the add must not wrap past 32 bits either */
+        if (seg_size > 0xffffffffUL - (al - 1)) { tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32)); return OE_ERR_FORMAT; }
         seg_size = (seg_size + al - 1) & ~(al - 1);
+        if (sz > 0xffffffffUL - seg_size) { tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32)); return OE_ERR_FORMAT; }
         off[3 * i] = seg_size;
         l->secaddr[i] = seg_used + 1;           /* its segment, 1-based, for now */
         seg_size += sz;
-        if (seg_size < sz) { tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32)); return OE_ERR_FORMAT; }
     }
     if (seg_size) off[3 * seg_used++ + 1] = seg_size;
     if (!seg_used) { tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32)); return OE_ERR_FORMAT; }
