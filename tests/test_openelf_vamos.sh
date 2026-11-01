@@ -27,6 +27,21 @@ so "$fx/outer.c" -L"$tmp/drawer/Libs/elf" -lgreet -o "$tmp/drawer/Libs/elf/libou
 so -DCYC_NAME=cyc_b "$fx/cyc.c" -o "$tmp/drawer/Libs/elf/libcycb.so"
 so -DCYC_NAME=cyc_a "$fx/cyc.c" -L"$tmp/drawer/Libs/elf" -lcycb -o "$tmp/drawer/Libs/elf/libcyca.so"
 so -DCYC_NAME=cyc_b "$fx/cyc.c" -L"$tmp/drawer/Libs/elf" -lcyca -o "$tmp/drawer/Libs/elf/libcycb.so"
+# an object whose .text says it holds 8 MB of the file: refused for the
+# file's size (Seek), before any memory is allocated for it
+python3 - "$tmp/drawer/ELF/hello-object" "$tmp/drawer/ELF/past-file" <<'PY'
+import struct, sys
+b = bytearray(open(sys.argv[1], 'rb').read())
+shoff, = struct.unpack_from('>I', b, 32)
+shnum, shstrndx = struct.unpack_from('>HH', b, 48)
+stroff, = struct.unpack_from('>I', b, shoff + shstrndx * 40 + 16)
+for i in range(shnum):
+    sh = shoff + i * 40
+    name, = struct.unpack_from('>I', b, sh)
+    if b[stroff + name:stroff + name + 6] == b'.text\0':
+        struct.pack_into('>I', b, sh + 20, 0x800000)
+open(sys.argv[2], 'wb').write(b)
+PY
 cd "$tmp/drawer"
 fail=0
 # vamos keeps a RAM: volume under $HOME between runs, so each run gets its
@@ -51,6 +66,7 @@ run "DLClose = 0" DL ELF/libgreet.so greet_answer
 run "it returns 42" DL libouter.so greet_answer         # found through what it needs
 run "DLClose = 0" DL libouter.so greet_answer
 run "could not be loaded" DL libcyca.so cyc_a           # a cycle is refused
+run "cut short" CALL ELF/past-file
 run "not an ELF file" CALL C/ElfHook
 [ "$fail" = 0 ] && echo "all passed"
 exit "$fail"
