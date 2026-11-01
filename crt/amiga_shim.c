@@ -2,7 +2,7 @@
  * languages with no register calls of their own (Rust, as rust/hello uses):
  * dos.library's PutStr and numbers through VPrintf, and memory from one exec pool per program, which
  * suits Rust's allocator (it frees with the size, as FreePooled wants).
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "../openelf_amiga.h"
 
 extern APTR SysBase;

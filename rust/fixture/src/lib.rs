@@ -1,7 +1,7 @@
 // The Rust fixture: prog.c's ten checks, in Rust, for 68k ELF with core
 // only (no_std). tests/test_openelf.sh loads it with elf.library's
 // core and runs it.
-// Copyright (c) 2026 AmigaChrome Team. MIT.
+// Copyright (c) 2026 AmiCradle Team. MIT.
 #![no_std]
 
 extern crate alloc;

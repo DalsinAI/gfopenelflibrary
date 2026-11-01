@@ -1,5 +1,5 @@
 | GFOpenELF: elf.library's first code, RomTag and register stubs.
-| Copyright (c) 2026 AmigaChrome Team. MIT.
+| Copyright (c) 2026 AmiCradle Team. MIT.
 |
 | Each library call arrives with its arguments in registers (elf.lvo) and
 | A6 = the library base; its stub pushes them and calls the C function in

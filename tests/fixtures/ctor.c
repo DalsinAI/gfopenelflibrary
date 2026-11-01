@@ -1,6 +1,6 @@
 /* A fixture program with constructors and destructors in three priorities
  * and data aligned to 32: env->program gives it a start routine.
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #ifdef LOCAL_NOTE
 /* an executable can't import: its destructors note to themselves */
 int dtor_seq;

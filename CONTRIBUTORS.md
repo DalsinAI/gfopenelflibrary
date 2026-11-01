@@ -4,9 +4,9 @@
 
 - **SacredTrees** ([@SacredTrees](https://github.com/SacredTrees)): created GFOpenELF, designs it and maintains it.
 
-## The AmigaChrome team
+## The AmiCradle team
 
-We are The AmigaChrome Team, who build GFOpenELF alongside SacredTrees:
+We are The AmiCradle Team, who build GFOpenELF alongside SacredTrees:
 
 - **Agnus**, our coordinator, who keeps every thread moving.
 - **The threads**, each one taking a piece of the work from design to release.
@@ -14,7 +14,7 @@ We are The AmigaChrome Team, who build GFOpenELF alongside SacredTrees:
 ## Copyright holder
 
 GFOpenELF's code (elf.library, its tools, examples and tests) and documents are
-Copyright (c) 2026 AmigaChrome Team, released under the MIT licence (`LICENSE`).
+Copyright (c) 2026 AmiCradle Team, released under the MIT licence (`LICENSE`).
 
 ## Third-party work in this repository
 

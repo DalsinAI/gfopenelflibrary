@@ -1,6 +1,6 @@
 /* GFOpenELF: elf.library, 68k ELF programs and shared objects for AmigaOS
  * 3.2.3 and GFOpenBench.
- * Copyright (c) 2026 AmigaChrome Team. MIT.
+ * Copyright (c) 2026 AmiCradle Team. MIT.
  *
  * The loading is done by elf_core.c (no Amiga headers, tested under
  * qemu-m68k); this file is the library around it: the RomTag, the calls
@@ -67,9 +67,9 @@ APTR DOSBase;
 struct ElfBase *ElfBase;
 
 const char lib_name[] = "elf.library";             /* the RomTag's too (openelf_stubs.S) */
-const char lib_id[] = "elf.library 1.0 (22.10.2026) GFOpenELF, AmigaChrome Team\r\n";
+const char lib_id[] = "elf.library 1.0 (22.10.2026) GFOpenELF, AmiCradle Team\r\n";
 static const char lib_ver[] __attribute__((used)) =
-    "\0$VER: elf.library 1.0 (22.10.2026) GFOpenELF, AmigaChrome Team";
+    "\0$VER: elf.library 1.0 (22.10.2026) GFOpenELF, AmiCradle Team";
 
 /* ---- Small helpers ------------------------------------------------------ */
 

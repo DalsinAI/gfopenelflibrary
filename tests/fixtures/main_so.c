@@ -1,6 +1,6 @@
 /* A fixture shared object with an entry that needs libfix.so (DT_NEEDED):
  * its functions through the PLT, its data through the GOT.
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "fixture.h"
 extern int lib_mul(int a, int b);
 extern int lib_calls_host(int x);

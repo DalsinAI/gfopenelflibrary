@@ -4,7 +4,7 @@ name: GFOpenELF (elf.library)
 # PIEs, shared objects and a Rust object, loaded and run; refusals; damaged
 # files), then the library itself in an emulated AmigaOS (amitools' vamos)
 # running the ELF examples. The m68k ELF GCC builds everything: no NDK and
-# no stove. MIT, Copyright (c) 2026 AmigaChrome Team.
+# no stove. MIT, Copyright (c) 2026 AmiCradle Team.
 on:
   workflow_dispatch:
   pull_request:

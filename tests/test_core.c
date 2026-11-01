@@ -1,6 +1,6 @@
 /* GFOpenELF's core under qemu-m68k: loads the fixtures tests/test_openelf.sh
  * builds with GCC and clang, runs what it loaded, and checks every refusal.
- * Copyright (c) 2026 AmigaChrome Team. MIT.
+ * Copyright (c) 2026 AmiCradle Team. MIT.
  *
  *   test_core DIR      DIR holds the fixtures
  * Every allocation is counted: a load, an unload or a refusal that leaves

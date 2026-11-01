@@ -2,7 +2,7 @@
  * toolchain), linked with crt/amiga_start.S, loaded by elf.library.
  *   ld -q (an executable that keeps its relocations), ld -r (an object, as
  *   AROS and MorphOS load), or -pie: all three run the same.
- * Copyright (c) 2026 AmigaChrome Team. MIT. */
+ * Copyright (c) 2026 AmiCradle Team. MIT. */
 #include "../openelf_amiga.h"
 
 extern APTR SysBase;

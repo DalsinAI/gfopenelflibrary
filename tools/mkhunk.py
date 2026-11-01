@@ -5,7 +5,7 @@
 # R_68K_32 as a HUNK_RELOC32 entry. PC-relative relocations need nothing.
 # Any other kind, or an undefined symbol, stops it. elf.library itself is
 # built this way: the hunk loader must be able to load the ELF loader.
-# Copyright (c) 2026 AmigaChrome Team. MIT.
+# Copyright (c) 2026 AmiCradle Team. MIT.
 import struct, sys
 
 def main(src, dst):

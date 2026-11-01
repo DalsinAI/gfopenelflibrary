@@ -1,5 +1,5 @@
 /* GFOpenELF's loader core (elf_core.h says what it does).
- * Copyright (c) 2026 AmigaChrome Team. MIT.
+ * Copyright (c) 2026 AmiCradle Team. MIT.
  *
  * Every field is read byte by byte, big-endian, so the core runs the same
  * on the 68k and anywhere else. It keeps little in memory: the section

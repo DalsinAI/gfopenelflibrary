@@ -3,7 +3,7 @@
 | A0 = the line, and SysBase at address 4; this saves SysBase and calls
 |     int amiga_main(const char *args, long len)
 | whose answer is the return code. Link it first.
-| Copyright (c) 2026 AmigaChrome Team. MIT.
+| Copyright (c) 2026 AmiCradle Team. MIT.
         .text
         .globl  _start
 _start:
