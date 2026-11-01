@@ -23,6 +23,7 @@ struct tenv {
     struct file f;
     long live;                  /* allocations not yet freed */
     unsigned long bytes;        /* segment bytes now allocated */
+    unsigned long peak;         /* and the most at once */
     const char *dir;
     int depth;
 };
@@ -81,6 +82,7 @@ static void *t_alloc(struct oe_env *env, oe_u32 size, enum oe_mem kind)
     }
     t->live++;
     if (kind == OE_MEM_SEGMENT) t->bytes += size;
+    if (t->bytes > t->peak) t->peak = t->bytes;
     return p;
 }
 
@@ -140,6 +142,7 @@ static int t_needed(struct oe_env *env, const char *name)
     n->depth = t->depth + 1;
     snprintf(path, sizeof path, "%s/%s", t->dir, name);
     if (read_file(path, &n->f)) return OE_ERR_NEEDED;
+    n->env.file_size = n->f.size;
     e = oe_load(&n->env, &libs[nlibs]);
     free(n->f.data);
     if (e == OE_OK) nlibs++;
@@ -179,6 +182,7 @@ static int run(const char *dir, const char *name, oe_u32 seg_max, int want_type,
     t.env.program = 1;
     snprintf(path, sizeof path, "%s/%s", dir, name);
     if (read_file(path, &t.f)) { printf("skipped %s: not built\n", name); return 0; }
+    t.env.file_size = t.f.size;
     e = oe_load(&t.env, &img);
     CHECK(e == OE_OK, "%s: %s (detail %lu, name %s)", name, oe_strerror(e), (unsigned long)img.detail, img.name);
     if (e == OE_OK) {
@@ -224,6 +228,7 @@ static void refuse(const char *dir, const char *name, int want)
     env_init(&t, dir);
     snprintf(path, sizeof path, "%s/%s", dir, name);
     if (read_file(path, &t.f)) { printf("skipped %s: not built\n", name); return; }
+    t.env.file_size = t.f.size;
     e = oe_load(&t.env, &img);
     CHECK(e == want, "%s: %s, want %s", name, oe_strerror(e), oe_strerror(want));
     printf("%-22s refused: %s\n", name, oe_strerror(e));
@@ -304,11 +309,13 @@ static void damage(const char *dir, const char *name)
     full = t.f.size;
     for (cut = 0; cut < full; cut += 1 + cut / 16) {
         t.f.size = cut;
+        t.env.file_size = cut & 1 ? cut : 0;    /* known half the time, as the read alone finds it otherwise */
         if (oe_load(&t.env, &img) == OE_OK) { loaded++; oe_unload(&t.env, &img); }
         unload_libs();
         tries++;
     }
     t.f.size = full;
+    t.env.file_size = full;
     for (i = 0; i < 400; i++) {
         unsigned long at;
         unsigned char old;
@@ -374,8 +381,10 @@ static unsigned long crafted_rel(unsigned char *f, int n, const unsigned long *s
     return 52 + shnum * 40;
 }
 
-/* Load a crafted file from memory: it must be refused with want */
-static void refuse_mem(const char *name, unsigned char *data, unsigned long size, oe_u32 seg_max, int want)
+/* Load a crafted file from memory: it must be refused with want (OE_OK:
+ * loaded). known: env->file_size is set, and then nothing the file can't
+ * fill may be allocated for it */
+static void refuse_mem(const char *name, unsigned char *data, unsigned long size, oe_u32 seg_max, int known, int want)
 {
     struct tenv t;
     struct oe_image img;
@@ -384,9 +393,12 @@ static void refuse_mem(const char *name, unsigned char *data, unsigned long size
     t.env.seg_max = seg_max;
     t.f.data = data;
     t.f.size = size;
+    t.env.file_size = known ? size : 0;
     e = oe_load(&t.env, &img);
     CHECK(e == want, "%s: %s, want %s", name, oe_strerror(e), oe_strerror(want));
-    printf("%-22s refused: %s\n", name, oe_strerror(e));
+    CHECK(!known || t.peak <= size, "%s: %lu segment bytes allocated for a %lu-byte file", name, t.peak, size);
+    if (e == OE_OK) printf("%-22s loaded, %lu segment bytes\n", name, t.peak);
+    else printf("%-22s refused: %s\n", name, oe_strerror(e));
     if (e == OE_OK) oe_unload(&t.env, &img);
     unload_libs();
     CHECK(t.live == 0, "%s: %ld allocations left", name, t.live);
@@ -403,13 +415,31 @@ static void crafted(void)
     static const unsigned long add_size[] = { 8, 0xfffffff8UL }, add_align[] = { 1, 1 };
     unsigned long n;
     n = crafted_rel(f, 4, two_size, two_align);
-    refuse_mem("rel-wrap-two", f, n, 0, OE_ERR_FORMAT);
+    refuse_mem("rel-wrap-two", f, n, 0, 0, OE_ERR_FORMAT);
     n = crafted_rel(f, 2, one_size, one_align);
-    refuse_mem("rel-wrap-one", f, n, 0, OE_ERR_FORMAT);
+    refuse_mem("rel-wrap-one", f, n, 0, 0, OE_ERR_FORMAT);
     /* split by seg_max, the big section is a segment of its own: too big */
-    refuse_mem("rel-wrap-one seg_max", f, n, 512, OE_ERR_NOMEM);
+    refuse_mem("rel-wrap-one seg_max", f, n, 512, 0, OE_ERR_NOMEM);
     n = crafted_rel(f, 2, add_size, add_align);
-    refuse_mem("rel-wrap-add", f, n, 0, OE_ERR_FORMAT);
+    refuse_mem("rel-wrap-add", f, n, 0, 0, OE_ERR_FORMAT);
+}
+
+/* A section said to hold more of the file than there is: refused before a
+ * segment is allocated for it; a NOBITS one that size is only memory */
+static void past_file(void)
+{
+    static unsigned char f[52 + 8 * 40];
+    static const unsigned long size[] = { 0x800000UL }, big[] = { 0x10000000UL }, align[] = { 4 };
+    unsigned long n;
+    n = crafted_rel(f, 1, size, align);
+    be32(f + 52 + 40 + 16, 0);              /* sh_offset */
+    refuse_mem("rel-past-file", f, n, 0, 1, OE_ERR_READ);
+    be32(f + 52 + 40 + 16, n - 4);          /* the last 4 bytes, then 8 MB more */
+    refuse_mem("rel-past-file offset", f, n, 0, 1, OE_ERR_READ);
+    n = crafted_rel(f, 1, big, align);
+    refuse_mem("rel-past-file 256 MB", f, n, 0, 1, OE_ERR_READ);
+    n = crafted_rel(f, 1, align, align);    /* 4 bytes of the file: loads */
+    refuse_mem("rel-in-file", f, n, 0, 1, OE_OK);
 }
 
 int main(int argc, char **argv)
@@ -418,6 +448,7 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IONBF, 0);
     identify();
     crafted();
+    past_file();
     /* objects, AROS and MorphOS style: one segment, then small segments */
     run(d, "prog-gcc.o", 0, 1, 1);
     run(d, "prog-gcc.o", 256, 1, 3);

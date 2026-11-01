@@ -57,6 +57,10 @@ struct oe_env {
      * program's own entry (D0 and A0 kept) and runs the destructors after */
     int program;
     void *user;
+    /* the file's length in bytes, 0 when not known: when known, a section
+     * or segment said to hold more of the file than there is is refused
+     * (OE_ERR_READ) before memory is allocated for it */
+    oe_u32 file_size;
 };
 
 enum oe_error {

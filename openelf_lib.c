@@ -167,6 +167,13 @@ static void env_init(struct fenv *f, BPTR fh, struct dl *owner)
     f->env.program = !owner;    /* a program's constructors run in its start routine */
     f->fh = fh;
     f->owner = owner;
+    /* the file's length, for the core's checks: Seek to the end tells it
+     * on the way back to the start (0, not known, when a handler can't) */
+    if (fh && Seek(fh, 0, OFFSET_END) >= 0) {
+        LONG end = Seek(fh, 0, OFFSET_BEGINNING);
+        if (end < 0) f->pos = 0xffffffffUL;     /* where the file stands is not known */
+        else f->env.file_size = (ULONG)end;
+    }
 }
 
 static void note_error(int e, const struct oe_image *img)

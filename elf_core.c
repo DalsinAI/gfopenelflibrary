@@ -196,10 +196,18 @@ static int inblock(const struct ld *l, oe_u32 va, oe_u32 len)
 static void *talloc(struct ld *l, oe_u32 n) { return l->env->alloc(l->env, n ? n : 4, OE_MEM_TEMP); }
 static void tfree(struct ld *l, void *p, oe_u32 n) { if (p) l->env->free(l->env, p, n ? n : 4, OE_MEM_TEMP); }
 
+/* len bytes at off lie inside the file, as far as env->file_size knows */
+static int infile(const struct ld *l, oe_u32 off, oe_u32 len)
+{
+    oe_u32 fs = l->env->file_size;
+    return !fs || (len <= fs && off <= fs - len);
+}
+
 static int rd(struct ld *l, oe_u32 off, void *buf, oe_u32 len)
 {
     if (len == 0) return OE_OK;
     if (off + len < off) return OE_ERR_FORMAT;
+    if (!infile(l, off, len)) return OE_ERR_READ;
     return l->env->read(l->env, off, buf, len) == 0 ? OE_OK : OE_ERR_READ;
 }
 
@@ -355,6 +363,7 @@ static int read_headers(struct ld *l)
     }
     if (l->shnum) {
         if (l->shnum > 0x100000UL) return OE_ERR_FORMAT;
+        if (!infile(l, g32(l->eh + 32), l->shnum * SHDR_SIZE)) return OE_ERR_READ;
         if (!(l->sh = (oe_u8 *)talloc(l, l->shnum * SHDR_SIZE))) return OE_ERR_NOMEM;
         if ((e = rd(l, g32(l->eh + 32), l->sh, l->shnum * SHDR_SIZE)) != OE_OK) return e;
     }
@@ -369,6 +378,7 @@ static int read_symtab(struct ld *l, oe_u32 i)
     if (SH_LINK(s) >= l->shnum || SH_SIZE(s) % SYM_SIZE) return OE_ERR_FORMAT;
     t = shdr(l, SH_LINK(s));
     if (SH_SIZE(t) >= 0xffffffffUL) return OE_ERR_FORMAT;    /* its size + 1 would wrap */
+    if (!infile(l, SH_OFFSET(s), SH_SIZE(s)) || !infile(l, SH_OFFSET(t), SH_SIZE(t))) return OE_ERR_READ;
     l->symsec = i;
     l->nsym = SH_SIZE(s) / SYM_SIZE;
     l->strsize = SH_SIZE(t);
@@ -503,6 +513,11 @@ static int load_rel(struct ld *l)
             if (!(SH_FLAGS(s) & SHF_ALLOC) || SH_SIZE(s) == 0) continue;
             sz = SH_SIZE(s);
             al = SH_ALIGN(s) ? SH_ALIGN(s) : 1;
+            /* its bytes come from the file: there must be that many */
+            if (SH_TYPE(s) != SHT_NOBITS && !infile(l, SH_OFFSET(s), sz)) {
+                tfree(l, off, (l->shnum + 1) * 3 * sizeof(oe_u32));
+                return OE_ERR_READ;
+            }
         } else {
             if (!commsize) continue;
             sz = commsize;
@@ -599,6 +614,7 @@ static int load_block(struct ld *l, oe_u8 **phbuf, oe_u32 *lo_out)
         if (t == PT_TLS) return OE_ERR_TLS;
         if (t != PT_LOAD || msz == 0) continue;
         if (fsz > msz || va + msz < va) return OE_ERR_FORMAT;
+        if (!infile(l, g32(p + 4), fsz)) return OE_ERR_READ;
         if ((g32(p + 24) & PF_X) && entry >= va && entry - va < fsz) entry_ok = 1;
         if (va < lo) lo = va;
         if (va + msz > hi) hi = va + msz;

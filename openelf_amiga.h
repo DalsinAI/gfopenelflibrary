@@ -65,6 +65,7 @@ struct SignalSemaphore { UWORD body[23]; };
 
 #define MODE_OLDFILE 1005
 #define OFFSET_BEGINNING (-1)
+#define OFFSET_END 1
 #define ERROR_NO_FREE_STORE 103
 #define ERROR_FILE_NOT_OBJECT 121
 #define ERROR_BAD_HUNK 122
