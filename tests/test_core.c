@@ -205,6 +205,63 @@ static void refuse(const char *dir, const char *name, int want)
     free(t.f.data);
 }
 
+static unsigned long fx_g32(const unsigned char *p) { return (unsigned long)p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3]; }
+static void fx_p32(unsigned char *p, unsigned long v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
+
+/* The header of f's first section of this type, or NULL */
+static unsigned char *fx_section(const struct file *f, unsigned long type)
+{
+    unsigned long shoff = fx_g32(f->data + 32), shnum = f->data[48] << 8 | f->data[49], i;
+    for (i = 1; i < shnum && shoff + (i + 1) * 40 <= f->size; i++)
+        if (fx_g32(f->data + shoff + i * 40 + 4) == type) return f->data + shoff + i * 40;
+    return NULL;
+}
+
+/* Table sizes that wrap 32 bits when the core checks them */
+static void bad_tables(const char *dir)
+{
+    struct tenv t;
+    struct oe_image img;
+    char path[512];
+    unsigned char *s;
+    int e;
+    /* an object's symbol strings, 0xffffffff bytes at offset 0: size + 1 is 0 */
+    env_init(&t, dir);
+    snprintf(path, sizeof path, "%s/prog-gcc.o", dir);
+    if (read_file(path, &t.f) == 0 && (s = fx_section(&t.f, 2)) != NULL) {
+        s = t.f.data + fx_g32(t.f.data + 32) + fx_g32(s + 24) * 40;
+        fx_p32(s + 16, 0);
+        fx_p32(s + 20, 0xffffffffUL);
+        e = oe_load(&t.env, &img);
+        CHECK(e == OE_ERR_FORMAT, "strings of 0xffffffff bytes: %s", oe_strerror(e));
+        printf("%-22s refused: %s\n", "symstr-wrap", oe_strerror(e));
+        if (e == OE_OK) oe_unload(&t.env, &img);
+        CHECK(t.live == 0, "symstr-wrap: %ld allocations left", t.live);
+        free(t.f.data);
+    } else printf("skipped symstr-wrap: no prog-gcc.o\n");
+    /* a SysV hash whose nbucket + nchain, times 4, wraps to 4 bytes: its
+     * symbols can't be looked up through it */
+    env_init(&t, dir);
+    snprintf(path, sizeof path, "%s/libfix.so", dir);
+    if (read_file(path, &t.f) == 0 && (s = fx_section(&t.f, 5)) != NULL) {
+        unsigned char *h = t.f.data + fx_g32(s + 16);
+        fx_p32(h, 0x40000001UL - fx_g32(h + 4));
+        unsigned long nsym = 0;
+        e = oe_load(&t.env, &img);
+        if (e == OE_OK) {
+            nsym = img.nsym;
+            CHECK(img.nsym == 0 && img.hash == 0, "hash-wrap: loaded with %lu symbols through the hash",
+                  (unsigned long)img.nsym);
+            if (img.nsym == 0) CHECK(oe_lookup(&img, "lib_mul") == 0, "hash-wrap: lib_mul found");
+            oe_unload(&t.env, &img);
+        }
+        if (e == OE_OK) printf("%-22s loaded, %lu symbols through the hash\n", "hash-wrap", nsym);
+        else printf("%-22s refused: %s\n", "hash-wrap", oe_strerror(e));
+        CHECK(t.live == 0, "hash-wrap: %ld allocations left", t.live);
+        free(t.f.data);
+    } else printf("skipped hash-wrap: no libfix.so\n");
+}
+
 /* Cut short and changed bytes: refuse or load, never crash or leak */
 static void damage(const char *dir, const char *name)
 {
@@ -303,6 +360,7 @@ int main(int argc, char **argv)
     damage(d, "ctor-r.o");
     damage(d, "ctor-exec-q");
     damage(d, "ctor-pie");
+    bad_tables(d);
     if (failures) { printf("%d failure(s)\n", failures); return 1; }
     printf("all passed\n");
     return 0;
