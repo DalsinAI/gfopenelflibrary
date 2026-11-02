@@ -5,10 +5,10 @@ and GFOpenBench, so what GCC's and LLVM's ELF toolchains build (C, C++ and
 Rust) runs with no conversion to the hunk format. Our own code, MIT, written
 from the System V ABI (ELF), the m68k psABI's relocation list and our own
 design, never from another loader's source (`CLEAN-ROOM.md`). The design and
-its reasons are in the design document linked from amigachrome-guest #446.
+its reasons are in the design document linked from amicradle-guest #446.
 
-This repository is `DalsinAI/openamigaelflibrary`. elf.library began in
-`DalsinAI/amigachrome-guest` as `libraries/openelf` (#446, #449) and moved
+This repository is `DalsinAI/gfopenelflibrary`. elf.library began in
+`DalsinAI/amicradle-guest` as `libraries/openelf` (#446, #449) and moved
 here with its history on 23 October 2026.
 
 **Load order** (Dale, 22 October 2026): the Amiga's own hunk format is tried
