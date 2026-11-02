@@ -14,7 +14,7 @@
  * is not there either the original error goes back unchanged, so whatever
  * the caller tries next (datatypes, a script) still runs.
  *
- * Multicore (amigachrome-guest's libraries/OPEN_LIBRARIES.md, section 5):
+ * Multicore (amicradle-guest's libraries/OPEN_LIBRARIES.md, section 5):
  * SysBase and DOSBase are set once at init. The shared-object list and the
  * hook are under one semaphore, held for a whole load (a load opens what it
  * needs, and semaphores nest in one task), so loads take turns: the core
