@@ -19,7 +19,7 @@ elf_romtag:
         .long   elf_romtag
         .long   elf_endskip
         .byte   0x80                    | RTF_AUTOINIT
-        .byte   1                       | version
+        .byte   2                       | version (the library's: exec may set lib_Version from it)
         .byte   9                       | NT_LIBRARY
         .byte   0                       | priority
         .long   lib_name
