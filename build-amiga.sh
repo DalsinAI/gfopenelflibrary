@@ -44,7 +44,7 @@ python3 "$HERE/tools/mkhunk.py" "$OBJ/elf.library.elf" "$OUT/Libs/elf.library"
 
 # the tools, hunk programs built the same way
 as "$HERE/crt/amiga_start.S" -o "$OBJ/start.o"
-for t in ElfHook ElfTest; do
+for t in ElfHook ElfTest LoadFmt ElfLoaderDemo; do
   cc -c "$HERE/c/$t.c" -o "$OBJ/$t.o"
   # shellcheck disable=SC2086
   "$LD" $LDQ -e _start "$OBJ/start.o" "$OBJ/$t.o" -o "$OBJ/$t.elf"

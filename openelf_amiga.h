@@ -68,7 +68,7 @@ struct SignalSemaphore { UWORD body[23]; };
 #define OFFSET_END 1
 #define ERROR_NO_FREE_STORE 103
 #define ERROR_FILE_NOT_OBJECT 121
-#define ERROR_BAD_HUNK 122
+#define ERROR_BAD_HUNK 235             /* "bad loadfile hunk" (122 is ERROR_INVALID_RESIDENT_LIBRARY) */
 #define ERROR_OBJECT_NOT_FOUND 205
 #define ERROR_OBJECT_WRONG_TYPE 212
 

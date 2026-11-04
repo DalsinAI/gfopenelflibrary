@@ -19,7 +19,7 @@ elf_romtag:
         .long   elf_romtag
         .long   elf_endskip
         .byte   0x80                    | RTF_AUTOINIT
-        .byte   1                       | version
+        .byte   2                       | version (the library's: exec may set lib_Version from it)
         .byte   9                       | NT_LIBRARY
         .byte   0                       | priority
         .long   lib_name
@@ -82,6 +82,71 @@ stub_\name:
         ONE     ElfHook, d0
         TWO     ElfLastError, a0, d0
         ONE     ElfErrorString, d0
+        ONE     ElfAddLoader, a0
+        ONE     ElfRemLoader, a0
+
+        .globl  stub_ElfLoadSegDOS
+stub_ElfLoadSegDOS:
+        move.l  %a0,-(%sp)
+        move.l  %d2,-(%sp)
+        move.l  %d1,-(%sp)
+        jsr     L_ElfLoadSegDOS
+        lea     12(%sp),%sp
+        rts
+
+        .globl  stub_ElfLoadWhy
+stub_ElfLoadWhy:
+        jmp     L_ElfLoadWhy
+
+| LONG elf_call_read(fn, fh, buf, len, DOSBase): InternalLoadSeg's read
+        .globl  elf_call_read
+elf_call_read:
+        movem.l %d2-%d3/%a6,-(%sp)
+        move.l  16(%sp),%a1
+        move.l  20(%sp),%d1
+        move.l  24(%sp),%d2
+        move.l  28(%sp),%d3
+        move.l  32(%sp),%a6
+        jsr     (%a1)
+        movem.l (%sp)+,%d2-%d3/%a6
+        rts
+
+| ULONG elf_call_alloc(fn, size, flags, SysBase): its alloc, in D0
+        .globl  elf_call_alloc
+elf_call_alloc:
+        move.l  %a6,-(%sp)
+        move.l  8(%sp),%a1
+        move.l  12(%sp),%d0
+        move.l  16(%sp),%d1
+        move.l  20(%sp),%a6
+        jsr     (%a1)
+        move.l  (%sp)+,%a6
+        rts
+
+| void elf_call_free(fn, mem, size, SysBase): its free
+        .globl  elf_call_free
+elf_call_free:
+        move.l  %a6,-(%sp)
+        move.l  8(%sp),%a0
+        move.l  12(%sp),%a1
+        move.l  16(%sp),%d0
+        move.l  20(%sp),%a6
+        jsr     (%a0)
+        move.l  (%sp)+,%a6
+        rts
+
+| ULONG elf_call_a0a1(APTR fn, APTR a0, APTR a1, APTR a6): a foreign
+| loader's el_Load
+        .globl  elf_call_a0a1
+elf_call_a0a1:
+        movem.l %d2-%d7/%a2-%a6,-(%sp)
+        move.l  48(%sp),%a2
+        move.l  52(%sp),%a0
+        move.l  56(%sp),%a1
+        move.l  60(%sp),%a6
+        jsr     (%a2)
+        movem.l (%sp)+,%d2-%d7/%a2-%a6
+        rts
 
 | dos.library's LoadSeg as patched: D1 = name, A6 = DOSBase
         .globl  elf_loadseg_patch
