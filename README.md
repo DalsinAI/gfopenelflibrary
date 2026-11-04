@@ -1,6 +1,6 @@
 # GFOpenELF: elf.library
 
-elf.library 1.0 loads 68k ELF programs and shared objects on AmigaOS 3.2.3
+elf.library 2.0 loads 68k ELF programs and shared objects on AmigaOS 3.2.3
 and GFOpenBench, so what GCC's and LLVM's ELF toolchains build (C, C++ and
 Rust) runs with no conversion to the hunk format. Our own code, MIT, written
 from the System V ABI (ELF), the m68k psABI's relocation list and our own
@@ -23,7 +23,10 @@ runs.
 | `openelf_amiga.h` | The Exec and DOS facts the library uses, in our own words, so it builds with no NDK. |
 | `openelf_public.h`, `elf.lvo` | The calls, LVO by LVO. |
 | `c/ElfHook.c` | `ElfHook` turns ELF loading in LoadSeg on, `ElfHook OFF` off. |
-| `c/ElfTest.c` | The lab tool: `ElfTest FILE` (ElfLoadSeg, RunCommand, UnLoadSeg), `ElfTest CALL FILE` (the same, jumping to the seglist itself, for emulators), `ElfTest DL FILE SYMBOL`. |
+| `c/ElfTest.c` | The lab tool: `ElfTest FILE` (ElfLoadSeg, RunCommand, UnLoadSeg), `ElfTest CALL FILE` (the same, jumping to the seglist itself, for emulators), `ElfTest DL FILE SYMBOL`, `ElfTest DOS [FUNCS] [X86] FILE` (2.0's ElfLoadSegDOS as GFOpenDOS calls it, through InternalLoadSeg-style functions, with a test x86 loader). |
+| `c/LoadFmt.c` | The lab tool for dos's format dispatch: `LoadFmt FILE...` (LoadSeg, NewLoadSeg and InternalLoadSeg of each, and IoErr, with no addresses, so OS 3.2.3 and the open ROM compare line by line), `LoadFmt LOOP N FILE` (a leak check), `LoadFmt WHY FILE`. |
+| `c/ElfLoaderDemo.c` | A foreign loader through `ElfAddLoader` (x86, `EM_386`): what Stage 5's loaders do, small enough to read. |
+| `tests/mkformats.sh` | The format fixtures: hunk, 68k ELF (executable, object, PIE), AROS-marked objects, PowerPC, x86, x86-64, ARM and AArch64 objects (clang), a WarpOS mixed hunk file, a text file, an empty file. |
 | `crt/amiga_start.S` | The start of an ELF program: saves SysBase, calls `int amiga_main(const char *args, long len)`. |
 | `crt/amiga_shim.c` | C-callable PutStr, a number through VPrintf, and memory from one exec pool, for languages with no register calls (Rust). |
 | `examples/` | `hello.c` (built as `-q`, as an object and as a PIE) and `greet.c` (a shared object with a constructor). |
@@ -45,6 +48,28 @@ runs.
 | -60 | `LONG ElfHook(LONG on)` | D0 |
 | -66 | `LONG ElfLastError(STRPTR buf, ULONG len)` | A0, D0 |
 | -72 | `STRPTR ElfErrorString(LONG err)` | D0 |
+| -78 | `BPTR ElfLoadSegDOS(BPTR fh, ULONG kind, const LONG *funcs)` (2.0) | D1, D2, A0 |
+| -84 | `LONG ElfAddLoader(struct ElfLoader *l)` (2.0) | A0 |
+| -90 | `LONG ElfRemLoader(struct ElfLoader *l)` (2.0) | A0 |
+| -96 | `STRPTR ElfLoadWhy(void)` (2.0) | |
+
+**2.0: dos.library's format dispatch.** GFOpenDOS (amicradle-guest
+`libraries/opendos/DESIGN-LOADSEG-FORMATS.md`) loads hunk files itself,
+unchanged, and hands a file its hunk loader refused to `ElfLoadSegDOS` when
+it starts `\x7fELF` or holds a `HUNK_PPC_CODE` hunk (WarpOS). A 68k ELF
+file loads here, whatever its `EI_OSABI` (AROS's 68k programs, marked 15,
+too). Any other CPU's goes to the loader added for its `e_machine` and
+`EI_OSABI` with `ElfAddLoader` (Stage 5's PowerPC, x86 and ARM loaders, an
+AROS personality); with none it is refused with OS 3.2.3's own IoErr (212
+for ELF, 235 for WarpOS's hunks) and a reason in words that `ElfLoadWhy`
+answers once to the task that asked, so the Shell prints "file is not
+executable" and then, for example, "a PowerPC ELF program: no loader for its
+CPU is installed". A foreign loader answers a seglist whose first segment is
+an anchor (`openelf_public.h`): GFOpenDOS's UnLoadSeg hands it back to the
+loader's `el_Unload`. Through InternalLoadSeg's functions an ELF file is read
+whole (they only read on) and its segments come from the caller's alloc.
+On OS 3.2.3's own dos.library, `ElfHook` goes through the same dispatch.
+1.0's `ERROR_BAD_HUNK` was 122 (ERROR_INVALID_RESIDENT_LIBRARY); it is 235.
 
 `ElfLoadSeg` returns an ordinary seglist (UnLoadSeg frees it; RunCommand and
 CreateProc run it). `DLOpen` finds a name with no path in `LIBS:elf/` and
@@ -104,6 +129,11 @@ either.
   vamos (68040): the examples run from `ElfTest`, `libgreet.so` through
   DLOpen, `greet_answer` found through `libouter.so`, which needs it, a
   cycle of shared objects refused, and a hunk file refused.
+- `tests/test_openelf_vamos.sh` also runs 2.0's dispatch: 68k ELF through
+  `ElfLoadSegDOS` on a DOS handle and through InternalLoadSeg-style
+  functions (executable, object, PIE, an AROS-marked object), each other CPU
+  refused with its reason and IoErr 212, and a test x86 loader added with
+  `ElfAddLoader` taking i386 objects (AROS-marked too) and taken out again.
 - CI: `.github/workflows/check-openelf.yml`.
 
 Seen on a real OS 3.2.3 (22 October 2026, a copy of Instance-23, Kick

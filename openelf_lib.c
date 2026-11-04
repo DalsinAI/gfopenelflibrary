@@ -8,7 +8,17 @@
  * AllocMem, the file through DOS, shared objects kept by name, and the
  * LoadSeg hook.
  *
- * The hook (ElfHook): dos.library's LoadSeg and NewLoadSeg patched so the
+ * dos.library's format dispatch (2.0, ElfLoadSegDOS; amicradle-guest
+ * libraries/opendos/DESIGN-LOADSEG-FORMATS.md): GFOpenDOS's LoadSeg,
+ * NewLoadSeg and InternalLoadSeg hand a file their hunk loader found to be
+ * ELF, or a hunk file with PowerPC hunks, to this library on the open
+ * handle. A 68k ELF file is loaded here (any EI_OSABI: AROS's 68k programs
+ * too); any other goes to the foreign loader added for its machine and
+ * EI_OSABI (ElfAddLoader: Stage 5's PowerPC, x86 and ARM loaders, AROS's
+ * personality), and with none is refused with OS 3.2.3's IoErr and a
+ * reason in words for ElfLoadWhy.
+ *
+ * The hook (ElfHook, for OS 3.2.3's own dos.library): LoadSeg and NewLoadSeg patched so the
  * Amiga's own hunk format is tried first, as before; only when that says
  * "not an object file" does elf.library look for \x7fELF, and when that
  * is not there either the original error goes back unchanged, so whatever
@@ -23,7 +33,7 @@
 #include "elf_core.h"
 #include "openelf_public.h"
 
-#define LIB_VERSION 1
+#define LIB_VERSION 2
 #define LIB_REVISION 0
 #define SEG_MAX (32UL * 1024)   /* ET_REL: sections per segment, for fragmented memory */
 #define MAX_DEPS 16
@@ -59,6 +69,10 @@ struct ElfBase {
     LONG last_error;
     ULONG last_detail;
     char last_name[OE_NAME_MAX];
+    /* 2.0: the foreign loaders, and the last refusal's words and task */
+    struct ElfLoader *loaders;
+    APTR why_task;
+    char why[96];
 };
 
 /* Set once by lib_init, read-only after. */
@@ -67,9 +81,9 @@ APTR DOSBase;
 struct ElfBase *ElfBase;
 
 const char lib_name[] = "elf.library";             /* the RomTag's too (openelf_stubs.S) */
-const char lib_id[] = "elf.library 1.0 (22.10.2026) GFOpenELF, AmiCradle Team\r\n";
+const char lib_id[] = "elf.library 2.0 (4.11.2026) GFOpenELF, AmiCradle Team\r\n";
 static const char lib_ver[] __attribute__((used)) =
-    "\0$VER: elf.library 1.0 (22.10.2026) GFOpenELF, AmiCradle Team";
+    "\0$VER: elf.library 2.0 (4.11.2026) GFOpenELF, AmiCradle Team";
 
 /* ---- Small helpers ------------------------------------------------------ */
 
@@ -87,23 +101,49 @@ struct fenv {
     struct dl *owner;           /* the shared object being loaded, for its DT_NEEDED; 0 for a program */
     ULONG depth;                /* 0 for what the caller opened, 1 for what that needs, ... */
     int err;                    /* a nested DLOpen's error */
+    const UBYTE *mem;           /* the whole file read in (InternalLoadSeg's read function), or 0 */
+    ULONG memsize;
+    const LONG *funcs;          /* InternalLoadSeg's functions: segments from its alloc, or 0 */
 };
 
+/* InternalLoadSeg's functions, called the 68k way (openelf_stubs.S): read
+ * with D1 fh, D2 buffer, D3 length and A6 DOSBase; alloc with D0 size, D1
+ * flags and A6 SysBase; free with A1 memory, D0 size and A6 SysBase. In
+ * assembly: A6 can't be a register variable in a function GCC gives a
+ * frame pointer (A6 is it). The SVR4 m68k ABI answers a pointer in A0, so
+ * alloc's answer (D0) is declared an integer. */
+LONG elf_call_read(LONG fn, BPTR fh, void *buf, LONG len, APTR dos);
+ULONG elf_call_alloc(LONG fn, ULONG size, ULONG flags, APTR sys);     /* D0, not A0: an int */
+void elf_call_free(LONG fn, void *mem, ULONG size, APTR sys);
+#define call_read(fn, fh, buf, len) elf_call_read(fn, fh, buf, len, DOSBase)
+#define call_alloc(fn, size, flags) ((void *)elf_call_alloc(fn, size, flags, SysBase))
+#define call_free(fn, mem, size) elf_call_free(fn, mem, size, SysBase)
+
+/* a segment comes from InternalLoadSeg's alloc when it has one, so its
+ * InternalUnLoadSeg frees what its own function allocated */
 static void *e_alloc(struct oe_env *env, oe_u32 size, enum oe_mem kind)
 {
-    (void)env; (void)kind;
+    struct fenv *f = (struct fenv *)env;
+    if (f->funcs && kind == OE_MEM_SEGMENT) return call_alloc(f->funcs[1], size, MEMF_PUBLIC | MEMF_CLEAR);
     return AllocMem(size, MEMF_ANY | MEMF_CLEAR);
 }
 
 static void e_free(struct oe_env *env, void *mem, oe_u32 size, enum oe_mem kind)
 {
-    (void)env; (void)kind;
-    FreeMem(mem, size);
+    struct fenv *f = (struct fenv *)env;
+    if (f->funcs && kind == OE_MEM_SEGMENT) call_free(f->funcs[2], mem, size);
+    else FreeMem(mem, size);
 }
 
 static oe_s32 e_read(struct oe_env *env, oe_u32 off, void *buf, oe_u32 len)
 {
     struct fenv *f = (struct fenv *)env;
+    if (f->mem) {
+        ULONG i;
+        if (off > f->memsize || len > f->memsize - off) return -1;
+        for (i = 0; i < len; i++) ((UBYTE *)buf)[i] = f->mem[off + i];
+        return 0;
+    }
     if (f->pos != off) {
         if (Seek(f->fh, (LONG)off, OFFSET_BEGINNING) < 0) return -1;
         f->pos = off;
@@ -206,24 +246,22 @@ static void run_array(oe_u32 at, oe_u32 n, int backwards)
 
 /* ---- Programs --------------------------------------------------------- */
 
-/* Load the open file fh as a seglist: the segments chained as BPTRs, with
- * a jump in front when the entry isn't the first segment's first byte. */
-static BPTR loadseg_fh(BPTR fh, int *errp)
+/* Load the file f reads as a seglist: the segments chained as BPTRs, with
+ * a jump in front when the entry isn't the first segment's first byte.
+ * The caller has set f up (env_init) and holds the semaphore. */
+static BPTR loadseg_env(struct fenv *f, int *errp)
 {
-    struct fenv f;
     struct oe_image img;
     BPTR first = 0;
     int e;
     ULONG i;
-    ObtainSemaphore(&ElfBase->sem);
-    env_init(&f, fh, 0);
-    e = oe_load(&f.env, &img);
-    if (e == OE_OK && !img.entry) { oe_unload(&f.env, &img); e = OE_ERR_TYPE; }    /* a shared object with no entry */
+    e = oe_load(&f->env, &img);
+    if (e == OE_OK && !img.entry) { oe_unload(&f->env, &img); e = OE_ERR_TYPE; }    /* a shared object with no entry */
     if (e == OE_OK) {
         UBYTE *stub = 0;
         if (img.entry != (ULONG)img.seg[0] + 8) {
-            stub = AllocMem(8 + OE_STUB_SIZE, MEMF_ANY | MEMF_CLEAR);
-            if (!stub) { oe_unload(&f.env, &img); e = OE_ERR_NOMEM; }
+            stub = f->env.alloc(&f->env, 8 + OE_STUB_SIZE, OE_MEM_SEGMENT);
+            if (!stub) { oe_unload(&f->env, &img); e = OE_ERR_NOMEM; }
             else {
                 *(ULONG *)stub = 8 + OE_STUB_SIZE;
                 oe_write_stub(stub + 8, img.entry);
@@ -245,9 +283,19 @@ static BPTR loadseg_fh(BPTR fh, int *errp)
         }
     }
     if (e != OE_OK) note_error(e, &img);
-    ReleaseSemaphore(&ElfBase->sem);
     *errp = e;
     return first;
+}
+
+static BPTR loadseg_fh(BPTR fh, int *errp)
+{
+    struct fenv f;
+    BPTR seg;
+    ObtainSemaphore(&ElfBase->sem);
+    env_init(&f, fh, 0);
+    seg = loadseg_env(&f, errp);
+    ReleaseSemaphore(&ElfBase->sem);
+    return seg;
 }
 
 static BPTR loadseg_name(CONST_STRPTR name, int *errp)
@@ -271,6 +319,249 @@ LONG L_ElfIdentify(const void *buf, ULONG len)
 {
     struct oe_info info;
     return oe_identify(buf, len, &info);
+}
+
+/* ---- dos.library's format dispatch (2.0) ------------------------------ */
+
+ULONG elf_call_a0a1(APTR fn, APTR a0, APTR a1, APTR a6);    /* openelf_stubs.S */
+
+#define EM_68K 4
+#define FILE_MAX (16UL * 1024 * 1024)   /* InternalLoadSeg's ELF, read whole: more is refused */
+
+static char *put(char *d, char *end, const char *s)
+{
+    while (*s && d < end) *d++ = *s++;
+    return d;
+}
+
+static char *putn(char *d, char *end, ULONG n)
+{
+    char t[12];
+    int i = 0;
+    do t[i++] = (char)('0' + n % 10); while ((n /= 10) && i < 11);
+    while (i && d < end) *d++ = t[--i];
+    return d;
+}
+
+/* the calling task's refusal, in words, for ElfLoadWhy */
+static void set_why(const char *a, ULONG n, const char *b, const char *c)
+{
+    char *d = ElfBase->why, *end = ElfBase->why + sizeof ElfBase->why - 1;
+    d = put(d, end, a);
+    if (n != 0xffffffffUL) d = putn(d, end, n);
+    d = put(d, end, b);
+    d = put(d, end, c);
+    *d = 0;
+    ElfBase->why_task = FindTask(0);
+}
+
+static const char *cpu_name(ULONG m)
+{
+    switch (m) {
+    case 3: return "an x86 (i386)";
+    case 20: return "a PowerPC";
+    case 21: return "a 64-bit PowerPC";
+    case 40: return "an ARM";
+    case 62: return "an x86-64";
+    case 183: return "an AArch64";
+    case 243: return "a RISC-V";
+    default: return 0;
+    }
+}
+
+static struct ElfLoader *find_loader(ULONG machine, LONG osabi)
+{
+    struct ElfLoader *l, *any = 0;
+    for (l = ElfBase->loaders; l; l = l->el_Next)
+        if (l->el_Machine == machine) {
+            if (l->el_OSABI == osabi) return l;
+            if (l->el_OSABI == ELF_OSABI_ANY && !any) any = l;
+        }
+    return any;
+}
+
+/* InternalLoadSeg's file, through its read function, whole (ELF wants to
+ * read where it likes): the 4 bytes dos's hunk loader read first, then the
+ * rest. 0 and *errp OE_ERR_NOMEM or OE_ERR_READ when it can't. */
+static UBYTE *read_whole(BPTR fh, const LONG *funcs, ULONG *sizep, ULONG *capp, int *errp)
+{
+    ULONG cap = 4096, n = 4;
+    UBYTE *buf = AllocMem(cap, MEMF_ANY);
+    if (!buf) { *errp = OE_ERR_NOMEM; return 0; }
+    buf[0] = 0x7f; buf[1] = 'E'; buf[2] = 'L'; buf[3] = 'F';
+    for (;;) {
+        LONG r;
+        if (n == cap) {
+            UBYTE *nb;
+            ULONG i;
+            if (cap >= FILE_MAX || !(nb = AllocMem(cap * 2, MEMF_ANY))) { FreeMem(buf, cap); *errp = cap >= FILE_MAX ? OE_ERR_READ : OE_ERR_NOMEM; return 0; }
+            for (i = 0; i < n; i++) nb[i] = buf[i];
+            FreeMem(buf, cap);
+            buf = nb;
+            cap *= 2;
+        }
+        r = call_read(funcs[0], fh, buf + n, (LONG)(cap - n));
+        if (r < 0) { FreeMem(buf, cap); *errp = OE_ERR_READ; return 0; }
+        if (r == 0) break;
+        n += (ULONG)r;
+    }
+    *sizep = n;
+    *capp = cap;
+    return buf;
+}
+
+/* the loader added for this file, with the message it is handed; 0 with
+ * IoErr() and the reason set when there is none (OS 3.2.3's IoErr) */
+static ULONG to_loader(struct ElfLoadMsg *m, const char *what, LONG oserr)
+{
+    struct ElfLoader *l = find_loader(m->elm_Machine, m->elm_OSABI);
+    ULONG seg;
+    if (!l) {
+        if (what) set_why(what, 0xffffffffUL, m->elm_OSABI == ELF_OSABI_AROS ? " AROS ELF" : " ELF",
+                          m->elm_Type == 1 ? " object: no loader for its CPU is installed"
+                          : m->elm_Type == 3 ? " shared object: no loader for its CPU is installed"
+                          : " program: no loader for its CPU is installed");
+        else set_why("an ELF file for machine ", m->elm_Machine, ": no loader for its CPU is installed", "");
+        SetIoErr(oserr);
+        return 0;
+    }
+    m->elm_Why = (STRPTR)ElfBase->why;
+    m->elm_WhySize = sizeof ElfBase->why;
+    ElfBase->why[0] = 0;
+    seg = elf_call_a0a1(l->el_Load, m, l, ElfBase);
+    if (!seg) {
+        LONG e = IoErr();
+        if (!ElfBase->why[0]) set_why(l->el_Name ? l->el_Name : "a foreign loader", 0xffffffffUL, ": the file was refused", "");
+        else ElfBase->why_task = FindTask(0);
+        SetIoErr(e);
+    }
+    return seg;
+}
+
+ULONG L_ElfLoadSegDOS(BPTR fh, ULONG kind, const LONG *funcs)
+{
+    struct ElfLoadMsg m;
+    struct fenv f;
+    UBYTE hdr[64];
+    ULONG seg = 0, cap = 0, i;
+    int e = OE_OK;
+    LONG machine;
+    for (i = 0; i < sizeof m; i++) ((UBYTE *)&m)[i] = 0;
+    m.elm_File = fh;
+    m.elm_Funcs = funcs;
+    m.elm_Kind = kind;
+    m.elm_OSABI = -1;
+    ObtainSemaphore(&ElfBase->sem);
+    if (ElfBase->why_task == FindTask(0)) ElfBase->why_task = 0;    /* an older refusal's words are not this one's */
+    if (kind == ELFKIND_HUNK_PPC) {
+        /* WarpOS's mixed program: the PowerPC face's, when it is added */
+        m.elm_Machine = ELFM_HUNK_PPC;
+        if (funcs) {                    /* dos has read into it, and can't go back */
+            set_why("a WarpOS PowerPC program (HUNK_PPC_CODE) through InternalLoadSeg", 0xffffffffUL, "", "");
+            SetIoErr(ERROR_BAD_HUNK);
+            ReleaseSemaphore(&ElfBase->sem);
+            return 0;
+        }
+        Seek(fh, 0, OFFSET_BEGINNING);
+        if (!(seg = to_loader(&m, 0, ERROR_BAD_HUNK)) && !find_loader(ELFM_HUNK_PPC, -1))
+            set_why("a WarpOS PowerPC program (HUNK_PPC_CODE): no PowerPC loader is installed", 0xffffffffUL, "", "");
+        ReleaseSemaphore(&ElfBase->sem);
+        return seg;
+    }
+    if (kind != ELFKIND_ELF) { ReleaseSemaphore(&ElfBase->sem); SetIoErr(ERROR_OBJECT_WRONG_TYPE); return 0; }
+    if (funcs) {
+        /* InternalLoadSeg's: its read function only reads on */
+        env_init(&f, 0, 0);
+        f.funcs = funcs;
+        if ((f.mem = read_whole(fh, funcs, &f.memsize, &cap, &e))) f.env.file_size = f.memsize;
+        m.elm_Image = f.mem;
+        m.elm_ImageSize = f.memsize;
+    } else env_init(&f, fh, 0);
+    if (e == OE_OK && f.env.read(&f.env, 0, hdr, 20) != 0) e = OE_ERR_READ;
+    if (e != OE_OK) {
+        set_why("an ELF file cut short or unreadable", 0xffffffffUL, "", "");
+        SetIoErr(e == OE_ERR_NOMEM ? ERROR_NO_FREE_STORE : ERROR_OBJECT_WRONG_TYPE);
+        goto out;
+    }
+    /* e_type and e_machine in the file's own byte order (EI_DATA) */
+    machine = hdr[5] == 1 ? (LONG)(hdr[18] | (hdr[19] << 8)) : (LONG)((hdr[18] << 8) | hdr[19]);
+    m.elm_Type = hdr[5] == 1 ? (ULONG)(hdr[16] | (hdr[17] << 8)) : (ULONG)((hdr[16] << 8) | hdr[17]);
+    m.elm_Machine = (ULONG)machine;
+    m.elm_OSABI = hdr[7];
+    m.elm_Header = hdr;
+    m.elm_HeaderLen = 20;
+    if (machine == EM_68K) {
+        /* ours: a SYSV or an AROS 68k file alike (AROS's 68k ABI is the
+         * Amiga's: registers, 6-byte vectors) */
+        int le;
+        seg = loadseg_env(&f, &le);
+        if (!seg) {
+            const char *n = ElfBase->last_name;
+            set_why("a 68k ELF file elf.library can't load: ", 0xffffffffUL, oe_strerror(le), "");
+            if (n[0] && (le == OE_ERR_UNDEF || le == OE_ERR_NEEDED)) {
+                char *d = ElfBase->why;
+                while (*d) d++;
+                d = put(d, ElfBase->why + sizeof ElfBase->why - 1, " (");
+                d = put(d, ElfBase->why + sizeof ElfBase->why - 1, n);
+                d = put(d, ElfBase->why + sizeof ElfBase->why - 1, ")");
+                *d = 0;
+            }
+            SetIoErr(dos_error(le));
+        }
+    } else {
+        /* a loader reads the file itself: from the start when dos's own
+         * (it Seeks), else on from where InternalLoadSeg's read left it */
+        if (!funcs) Seek(fh, 0, OFFSET_BEGINNING);
+        seg = to_loader(&m, cpu_name((ULONG)machine), ERROR_OBJECT_WRONG_TYPE);
+    }
+out:
+    if (f.mem) FreeMem((APTR)f.mem, cap);
+    ReleaseSemaphore(&ElfBase->sem);
+    return seg;
+}
+
+LONG L_ElfAddLoader(struct ElfLoader *l)
+{
+    LONG r = -1;
+    struct ElfLoader *o;
+    ObtainSemaphore(&ElfBase->sem);
+    for (o = ElfBase->loaders; o; o = o->el_Next)
+        if (o->el_Machine == l->el_Machine && o->el_OSABI == l->el_OSABI) break;
+    if (!o) {
+        l->el_Next = ElfBase->loaders;
+        ElfBase->loaders = l;
+        ElfBase->lib.lib_OpenCnt++;     /* a loader in, the library stays */
+        r = 0;
+    }
+    ReleaseSemaphore(&ElfBase->sem);
+    return r;
+}
+
+LONG L_ElfRemLoader(struct ElfLoader *l)
+{
+    LONG r = -1;
+    struct ElfLoader **pp;
+    ObtainSemaphore(&ElfBase->sem);
+    for (pp = &ElfBase->loaders; *pp; pp = &(*pp)->el_Next)
+        if (*pp == l) {
+            if (!l->el_Count) {
+                *pp = l->el_Next;
+                ElfBase->lib.lib_OpenCnt--;
+                r = 0;
+            }
+            break;
+        }
+    ReleaseSemaphore(&ElfBase->sem);
+    return r;
+}
+
+/* the calling task's last refusal, once: a second call answers 0 */
+ULONG L_ElfLoadWhy(void)
+{
+    APTR me = FindTask(0);
+    if (ElfBase->why_task != me || !ElfBase->why[0]) return 0;
+    ElfBase->why_task = 0;
+    return (ULONG)ElfBase->why;
 }
 
 /* ---- Shared objects ------------------------------------------------------ */
@@ -415,18 +706,32 @@ static int elf_worth_trying(LONG err)
     return err == ERROR_FILE_NOT_OBJECT || err == ERROR_BAD_HUNK || err == ERROR_OBJECT_WRONG_TYPE;
 }
 
+/* the hook's ELF load, after the hunk loader said no with err: a file that
+ * starts \x7fELF goes through the dispatch (so other CPUs are refused with
+ * their reason, as on GFOpenDOS); anything else gets err back unchanged */
+static ULONG hook_load(CONST_STRPTR name, LONG err)
+{
+    BPTR fh;
+    UBYTE b[4];
+    ULONG seg = 0;
+    LONG e = err;
+    if (!name || !elf_worth_trying(err)) return 0;
+    if (!(fh = Open(name, MODE_OLDFILE))) { SetIoErr(err); return 0; }
+    if (Read(fh, b, 4) == 4 && b[0] == 0x7f && b[1] == 'E' && b[2] == 'L' && b[3] == 'F') {
+        seg = L_ElfLoadSegDOS(fh, ELFKIND_ELF, 0);
+        e = IoErr();
+    }
+    Close(fh);
+    if (!seg) SetIoErr(e);
+    return seg;
+}
+
 /* dos.library's LoadSeg, hunks first */
 ULONG elf_loadseg_c(CONST_STRPTR name, APTR dos)
 {
     ULONG seg = elf_call_d1(ElfBase->old_loadseg, (ULONG)name, dos);
-    LONG err;
-    int e;
     if (seg || !name) return seg;
-    err = IoErr();
-    if (!elf_worth_trying(err)) return 0;
-    seg = (ULONG)loadseg_name(name, &e);
-    if (!seg) SetIoErr(e == OE_ERR_NOT_ELF || e < 0 ? err : dos_error(e));
-    return seg;
+    return hook_load(name, IoErr());
 }
 
 /* NewLoadSeg(file, tags): the tags are for hunk files, so an ELF file
@@ -434,14 +739,8 @@ ULONG elf_loadseg_c(CONST_STRPTR name, APTR dos)
 ULONG elf_newloadseg_c(CONST_STRPTR name, ULONG tags, APTR dos)
 {
     ULONG seg = elf_call_d1d2(ElfBase->old_newloadseg, (ULONG)name, tags, dos);
-    LONG err;
-    int e;
     if (seg || !name) return seg;
-    err = IoErr();
-    if (!elf_worth_trying(err)) return 0;
-    seg = (ULONG)loadseg_name(name, &e);
-    if (!seg) SetIoErr(e == OE_ERR_NOT_ELF || e < 0 ? err : dos_error(e));
-    return seg;
+    return hook_load(name, IoErr());
 }
 
 /* on: 1 installs the hook, 0 takes it out (only when nobody patched over
@@ -521,7 +820,7 @@ ULONG lib_open_c(struct ElfBase *base)
 ULONG lib_expunge_c(struct ElfBase *base)
 {
     BPTR seglist;
-    if (base->lib.lib_OpenCnt || base->hooked || base->dls) {
+    if (base->lib.lib_OpenCnt || base->hooked || base->dls || base->loaders) {
         base->lib.lib_Flags |= LIBF_DELEXP;
         return 0;
     }
@@ -546,6 +845,7 @@ ULONG lib_close_c(struct ElfBase *base)
 extern char stub_init[], stub_open[], stub_close[], stub_expunge[], stub_null[];
 extern char stub_ElfLoadSeg[], stub_ElfIdentify[], stub_DLOpen[], stub_DLSym[], stub_DLClose[];
 extern char stub_ElfHook[], stub_ElfLastError[], stub_ElfErrorString[];
+extern char stub_ElfLoadSegDOS[], stub_ElfAddLoader[], stub_ElfRemLoader[], stub_ElfLoadWhy[];
 
 static const APTR lib_vectors[] = {
     stub_open, stub_close, stub_expunge, stub_null,
@@ -557,6 +857,10 @@ static const APTR lib_vectors[] = {
     stub_ElfHook,               /* -60 */
     stub_ElfLastError,          /* -66 */
     stub_ElfErrorString,        /* -72 */
+    stub_ElfLoadSegDOS,         /* -78, 2.0 */
+    stub_ElfAddLoader,          /* -84 */
+    stub_ElfRemLoader,          /* -90 */
+    stub_ElfLoadWhy,            /* -96 */
     (APTR)-1
 };
 

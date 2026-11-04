@@ -83,5 +83,28 @@ run "could not be loaded" DL libchain0.so chain_0
 stack=
 run "cut short" CALL ELF/past-file
 run "not an ELF file" CALL C/ElfHook
+# 2.0: GFOpenDOS's dispatch (ElfLoadSegDOS), on DOS's handle and through
+# InternalLoadSeg-style functions; other CPUs refused with their reason, or
+# handed to a loader added for them (DESIGN-LOADSEG-FORMATS.md)
+OUT=$tmp/drawer/FMT sh "$oe/tests/mkformats.sh" > "$tmp/fmt.log" 2>&1 || { cat "$tmp/fmt.log"; exit 1; }
+run "Hello from an ELF program" DOS ELF/hello-exec
+run "Hello from an ELF program" DOS FUNCS ELF/hello-exec
+run "Hello from an ELF program" DOS FUNCS ELF/hello-object
+run "Hello from an ELF program" DOS ELF/hello-pie
+run "Hello from an ELF program" DOS FMT/aros68k-object
+run "Hello from an ELF program" DOS FUNCS FMT/aros68k-object
+run "a PowerPC ELF object: no loader" DOS FMT/ppc-object
+run "IoErr 212" DOS FMT/ppc-object
+run "a PowerPC ELF program: no loader" DOS FUNCS FMT/ppc-exec
+run "an x86-64 AROS ELF object: no loader" DOS FMT/aros-x86_64-object
+run "an ARM ELF object: no loader" DOS FMT/arm-object
+run "an AArch64 AROS ELF object: no loader" DOS FUNCS FMT/aros-aarch64-object
+run "an x86 (i386) ELF object: no loader" DOS FMT/i386-object
+run "returned 42" DOS X86 FMT/i386-object
+run "the loader saw machine 3, type 1" DOS X86 FMT/i386-object
+run "ElfRemLoader = 0" DOS X86 FMT/i386-object
+run "returned 42" DOS FUNCS X86 FMT/aros-i386-object
+run "an x86-64 ELF object: no loader" DOS X86 FMT/x86_64-object
+run "68k ELF file elf.library can't load" DOS ELF/libgreet.so
 [ "$fail" = 0 ] && echo "all passed"
 exit "$fail"

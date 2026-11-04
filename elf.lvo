@@ -1,4 +1,4 @@
-# elf.library 1.0's jump table, as GFOpenELF builds it: LVO, call, registers.
+# elf.library 2.0's jump table, as GFOpenELF builds it: LVO, call, registers.
 # Our own API (README.md, "The API"): OS 4.1's elf.library is an interface,
 # not a jump table, so nothing here can match it byte for byte; the DL
 # calls follow dlopen's names and meaning, as OS 4.1's DLOpen, DLSym and
@@ -11,3 +11,7 @@
 -60 ElfHook d0
 -66 ElfLastError a0,d0
 -72 ElfErrorString d0
+-78 ElfLoadSegDOS d1,d2,a0
+-84 ElfAddLoader a0
+-90 ElfRemLoader a0
+-96 ElfLoadWhy
