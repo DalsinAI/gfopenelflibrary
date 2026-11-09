@@ -16,6 +16,8 @@
  *  -84  LONG  ElfAddLoader(struct ElfLoader *l) A0
  *  -90  LONG  ElfRemLoader(struct ElfLoader *l) A0
  *  -96  STRPTR ElfLoadWhy(void)
+ * -102  ULONG  ElfSegCPU(BPTR seg)          D1
+ * -108  ULONG  ElfHostCPU(ULONG set)        D0
  *
  * ElfLoadSeg returns an ordinary seglist: UnLoadSeg frees it, RunCommand
  * and CreateProc run it. ElfIdentify answers an OE_ERR_ code (0 = a 68k ELF
@@ -61,6 +63,8 @@
 #define LVO_ElfAddLoader (-84)
 #define LVO_ElfRemLoader (-90)
 #define LVO_ElfLoadWhy (-96)
+#define LVO_ElfSegCPU (-102)
+#define LVO_ElfHostCPU (-108)
 
 #define RTLD_LAZY 1             /* accepted; every symbol is bound at load */
 #define RTLD_NOW 2
@@ -131,9 +135,18 @@ struct ElfLoader {
  *   +12 el_Unload       what UnLoadSeg calls
  *   +16 ~el_Unload      the check
  *   +20 el_UserData     handed to el_Unload in A0
- *   +24 ...             the loader's own
+ *   +24 e_machine       the CPU this seglist is (EM_68K 4 when there is
+ *                       no anchor: a hunk file is always 68k). ElfSegCPU.
+ *   +28 ...             the loader's own
  * (dos_seg.cpp, od_UnLoadSeg) */
 #define ELF_ANCHOR_MAGIC 0x4C534658UL   /* "LSFX" */
 #define ELF_ANCHOR_SIZE 24
+#define ELF_ANCHOR_CPU 24               /* contents +24: e_machine */
+
+/* ElfHostCPU(0) answers the host's CPU as an ELF e_machine: 4, 20, 62 or
+ * 183. A real 680x0, and a host that has not said, answer 4. ElfHostCPU
+ * with any other value records it. The names live in elf_cpu.h, which
+ * this header does not include. hostlib ABI 2's probe uses HL_ARCH_*;
+ * the board maps those across when that ABI is in force. */
 
 #endif

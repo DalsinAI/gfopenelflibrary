@@ -93,18 +93,18 @@ run "Hello from an ELF program" DOS FUNCS ELF/hello-object
 run "Hello from an ELF program" DOS ELF/hello-pie
 run "Hello from an ELF program" DOS FMT/aros68k-object
 run "Hello from an ELF program" DOS FUNCS FMT/aros68k-object
-run "a PowerPC ELF object: no loader" DOS FMT/ppc-object
+run "This program is PowerPC code; AC460 is not connected" DOS FMT/ppc-object
 run "IoErr 212" DOS FMT/ppc-object
-run "a PowerPC ELF program: no loader" DOS FUNCS FMT/ppc-exec
-run "an x86-64 AROS ELF object: no loader" DOS FMT/aros-x86_64-object
-run "an ARM ELF object: no loader" DOS FMT/arm-object
-run "an AArch64 AROS ELF object: no loader" DOS FUNCS FMT/aros-aarch64-object
-run "an x86 (i386) ELF object: no loader" DOS FMT/i386-object
+run "This program is PowerPC code; AC460 is not connected" DOS FUNCS FMT/ppc-exec
+run "This program is x86-64 code; no x86 emulator yet" DOS FMT/aros-x86_64-object
+run "This program is ARM code; no ARM emulator yet" DOS FMT/arm-object
+run "This program is AArch64 code; no AArch64 emulator yet" DOS FUNCS FMT/aros-aarch64-object
+run "This program is x86 code; no x86 emulator yet" DOS FMT/i386-object
 run "returned 42" DOS X86 FMT/i386-object
 run "the loader saw machine 3, type 1" DOS X86 FMT/i386-object
 run "ElfRemLoader = 0" DOS X86 FMT/i386-object
 run "returned 42" DOS FUNCS X86 FMT/aros-i386-object
-run "an x86-64 ELF object: no loader" DOS X86 FMT/x86_64-object
+run "This program is x86-64 code; no x86 emulator yet" DOS X86 FMT/x86_64-object
 run "68k ELF file elf.library can't load" DOS ELF/libgreet.so
 [ "$fail" = 0 ] && echo "all passed"
 exit "$fail"

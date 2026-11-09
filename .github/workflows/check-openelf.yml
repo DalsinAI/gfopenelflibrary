@@ -22,6 +22,8 @@ jobs:
         run: rustup component add rust-src
       - name: amitools (vamos)
         run: pip install --break-system-packages amitools==0.8.1 machine68k==0.3.0
+      - name: CPU dispatch on the host
+        run: cc -Wall -Werror -o test_elf_cpu tests/test_elf_cpu.c elf_cpu.c && ./test_elf_cpu
       - name: Loader core under qemu-m68k
         run: QEMU_M68K=qemu-m68k sh tests/test_openelf.sh
       - name: elf.library in vamos

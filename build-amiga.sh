@@ -37,8 +37,9 @@ noundef() {
 as "$HERE/openelf_stubs.S" -o "$OBJ/stubs.o"
 cc -c "$HERE/openelf_lib.c" -o "$OBJ/lib.o"
 cc -c "$HERE/elf_core.c" -o "$OBJ/core.o"
+cc -c "$HERE/elf_cpu.c" -o "$OBJ/cpu.o"
 # shellcheck disable=SC2086
-"$LD" $LDQ -e start "$OBJ/stubs.o" "$OBJ/lib.o" "$OBJ/core.o" -o "$OBJ/elf.library.elf"
+"$LD" $LDQ -e start "$OBJ/stubs.o" "$OBJ/lib.o" "$OBJ/core.o" "$OBJ/cpu.o" -o "$OBJ/elf.library.elf"
 noundef "$OBJ/elf.library.elf"
 python3 "$HERE/tools/mkhunk.py" "$OBJ/elf.library.elf" "$OUT/Libs/elf.library"
 
