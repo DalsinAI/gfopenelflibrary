@@ -98,6 +98,9 @@ stub_ElfLoadSegDOS:
 stub_ElfLoadWhy:
         jmp     L_ElfLoadWhy
 
+        ONE     ElfSegCPU, d1
+        ONE     ElfHostCPU, d0
+
 | LONG elf_call_read(fn, fh, buf, len, DOSBase): InternalLoadSeg's read
         .globl  elf_call_read
 elf_call_read:

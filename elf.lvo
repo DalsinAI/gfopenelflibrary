@@ -15,3 +15,5 @@
 -84 ElfAddLoader a0
 -90 ElfRemLoader a0
 -96 ElfLoadWhy
+-102 ElfSegCPU d1
+-108 ElfHostCPU d0

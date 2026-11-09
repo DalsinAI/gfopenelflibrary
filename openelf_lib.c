@@ -31,6 +31,7 @@
  * itself is reentrant, and the list is what they share. */
 #include "openelf_amiga.h"
 #include "elf_core.h"
+#include "elf_cpu.h"
 #include "openelf_public.h"
 
 #define LIB_VERSION 2
@@ -73,6 +74,7 @@ struct ElfBase {
     struct ElfLoader *loaders;
     APTR why_task;
     char why[96];
+    ULONG host_cpu;             /* ELF e_machine of the host; 0 until set, then EM_68K */
 };
 
 /* Set once by lib_init, read-only after. */
@@ -355,20 +357,6 @@ static void set_why(const char *a, ULONG n, const char *b, const char *c)
     ElfBase->why_task = FindTask(0);
 }
 
-static const char *cpu_name(ULONG m)
-{
-    switch (m) {
-    case 3: return "an x86 (i386)";
-    case 20: return "a PowerPC";
-    case 21: return "a 64-bit PowerPC";
-    case 40: return "an ARM";
-    case 62: return "an x86-64";
-    case 183: return "an AArch64";
-    case 243: return "a RISC-V";
-    default: return 0;
-    }
-}
-
 static struct ElfLoader *find_loader(ULONG machine, LONG osabi)
 {
     struct ElfLoader *l, *any = 0;
@@ -416,12 +404,12 @@ static ULONG to_loader(struct ElfLoadMsg *m, const char *what, LONG oserr)
 {
     struct ElfLoader *l = find_loader(m->elm_Machine, m->elm_OSABI);
     ULONG seg;
+    (void)what;
     if (!l) {
-        if (what) set_why(what, 0xffffffffUL, m->elm_OSABI == ELF_OSABI_AROS ? " AROS ELF" : " ELF",
-                          m->elm_Type == 1 ? " object: no loader for its CPU is installed"
-                          : m->elm_Type == 3 ? " shared object: no loader for its CPU is installed"
-                          : " program: no loader for its CPU is installed");
-        else set_why("an ELF file for machine ", m->elm_Machine, ": no loader for its CPU is installed", "");
+        char why[96];
+        ULONG host = ElfBase->host_cpu ? ElfBase->host_cpu : ELF_CPU_68K;
+        elf_dispatch(m->elm_Machine, host, why, sizeof why);
+        set_why(why, 0xffffffffUL, "", "");
         SetIoErr(oserr);
         return 0;
     }
@@ -429,7 +417,10 @@ static ULONG to_loader(struct ElfLoadMsg *m, const char *what, LONG oserr)
     m->elm_WhySize = sizeof ElfBase->why;
     ElfBase->why[0] = 0;
     seg = elf_call_a0a1(l->el_Load, m, l, ElfBase);
-    if (!seg) {
+    if (seg) {
+        UBYTE *p = (UBYTE *)((ULONG)seg << 2);
+        elf_seg_stamp(p, *(ULONG *)(p - 4), m->elm_Machine);
+    } else {
         LONG e = IoErr();
         if (!ElfBase->why[0]) set_why(l->el_Name ? l->el_Name : "a foreign loader", 0xffffffffUL, ": the file was refused", "");
         else ElfBase->why_task = FindTask(0);
@@ -512,7 +503,7 @@ ULONG L_ElfLoadSegDOS(BPTR fh, ULONG kind, const LONG *funcs)
         /* a loader reads the file itself: from the start when dos's own
          * (it Seeks), else on from where InternalLoadSeg's read left it */
         if (!funcs) Seek(fh, 0, OFFSET_BEGINNING);
-        seg = to_loader(&m, cpu_name((ULONG)machine), ERROR_OBJECT_WRONG_TYPE);
+        seg = to_loader(&m, 0, ERROR_OBJECT_WRONG_TYPE);
     }
 out:
     if (f.mem) FreeMem((APTR)f.mem, cap);
@@ -562,6 +553,23 @@ ULONG L_ElfLoadWhy(void)
     if (ElfBase->why_task != me || !ElfBase->why[0]) return 0;
     ElfBase->why_task = 0;
     return (ULONG)ElfBase->why;
+}
+
+/* The CPU recorded on a seglist. A hunk file and a 68k ELF file have no
+ * anchor, and are 68k. */
+ULONG L_ElfSegCPU(BPTR seg)
+{
+    UBYTE *p;
+    if (!seg) return ELF_CPU_68K;
+    p = (UBYTE *)((ULONG)seg << 2);
+    return elf_seg_cpu(p, *(ULONG *)(p - 4));
+}
+
+/* 0 asks. Any other e_machine records the host CPU and answers it. */
+ULONG L_ElfHostCPU(ULONG set)
+{
+    if (set) ElfBase->host_cpu = set;
+    return ElfBase->host_cpu ? ElfBase->host_cpu : ELF_CPU_68K;
 }
 
 /* ---- Shared objects ------------------------------------------------------ */
@@ -803,6 +811,7 @@ ULONG lib_init_c(struct ElfBase *base, BPTR seglist, APTR sys)
     base->lib.lib_Revision = LIB_REVISION;
     base->lib.lib_IdString = (APTR)lib_id;
     InitSemaphore(&base->sem);
+    base->host_cpu = ELF_CPU_68K;
     if (!(DOSBase = OpenLibrary("dos.library", 36))) {
         FreeMem((UBYTE *)base - base->lib.lib_NegSize, base->lib.lib_NegSize + base->lib.lib_PosSize);
         return 0;
@@ -846,6 +855,7 @@ extern char stub_init[], stub_open[], stub_close[], stub_expunge[], stub_null[];
 extern char stub_ElfLoadSeg[], stub_ElfIdentify[], stub_DLOpen[], stub_DLSym[], stub_DLClose[];
 extern char stub_ElfHook[], stub_ElfLastError[], stub_ElfErrorString[];
 extern char stub_ElfLoadSegDOS[], stub_ElfAddLoader[], stub_ElfRemLoader[], stub_ElfLoadWhy[];
+extern char stub_ElfSegCPU[], stub_ElfHostCPU[];
 
 static const APTR lib_vectors[] = {
     stub_open, stub_close, stub_expunge, stub_null,
@@ -861,6 +871,8 @@ static const APTR lib_vectors[] = {
     stub_ElfAddLoader,          /* -84 */
     stub_ElfRemLoader,          /* -90 */
     stub_ElfLoadWhy,            /* -96 */
+    stub_ElfSegCPU,             /* -102 */
+    stub_ElfHostCPU,            /* -108 */
     (APTR)-1
 };
 
