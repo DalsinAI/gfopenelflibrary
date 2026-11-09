@@ -143,13 +143,10 @@ struct ElfLoader {
 #define ELF_ANCHOR_SIZE 24
 #define ELF_ANCHOR_CPU 24               /* contents +24: e_machine */
 
-/* ElfHostCPU(0) answers the host's CPU as an ELF e_machine. A real 680x0,
- * and a host that has not said, answer 4 (EM_68K). ElfHostCPU(machine)
- * records it. The same numbers as elf_cpu.h. hostlib ABI 2's probe uses
- * its own HL_ARCH_*; the board maps those across when that ABI is in force. */
-#define ELF_CPU_68K 4
-#define ELF_CPU_PPC 20
-#define ELF_CPU_X86_64 62
-#define ELF_CPU_AARCH64 183
+/* ElfHostCPU(0) answers the host's CPU as an ELF e_machine: 4, 20, 62 or
+ * 183. A real 680x0, and a host that has not said, answer 4. ElfHostCPU
+ * with any other value records it. The names live in elf_cpu.h, which
+ * this header does not include. hostlib ABI 2's probe uses HL_ARCH_*;
+ * the board maps those across when that ABI is in force. */
 
 #endif
