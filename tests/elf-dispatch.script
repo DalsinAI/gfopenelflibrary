@@ -1,0 +1,15 @@
+; ELF dispatch in a lab (Team 6, 10 Nov 2026).
+; The host script copies ElfTest, elf.library and these files to SYS:ElfDispatch
+; and runs this through LabAgent. FailAt 21 so a refusal does not stop the rest.
+; A PowerPC file is the AC460 route. An x86-64 file and an AArch64 file are
+; refused with their sentences. A Hunk file is 68k and runs as one.
+FailAt 21
+Echo "--- ppc ---"
+C:ElfTest DOS SYS:ElfDispatch/ppc-exec
+Echo "--- x86-64 ---"
+C:ElfTest DOS SYS:ElfDispatch/x86_64-object
+Echo "--- aarch64 ---"
+C:ElfTest DOS SYS:ElfDispatch/aarch64-object
+Echo "--- hunk ---"
+SYS:ElfDispatch/hunk-hello
+Echo "--- done ---"
