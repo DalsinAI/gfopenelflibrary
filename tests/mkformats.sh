@@ -22,8 +22,8 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 oe=$here/..
 OUT=${OUT:-$PWD/formats}
-CC=${CC:-m68k-linux-gnu-gcc}
-LD=${LD:-m68k-linux-gnu-ld}
+CC=${CC:-${M68K_ELF:-m68k-linux-gnu-}gcc}
+LD=${LD:-${M68K_ELF:-m68k-linux-gnu-}ld}
 mkdir -p "$OUT"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 F="-std=gnu11 -m68040 -msoft-float -Os -ffreestanding -fno-builtin -fno-pic -fomit-frame-pointer

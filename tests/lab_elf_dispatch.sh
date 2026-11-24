@@ -40,7 +40,7 @@ if [ -z "${LAB:-}" ]; then
 fi
 
 [ -d "$LAB/devices/harddisks/DH0" ] || { echo "not a lab: $LAB" >&2; exit 2; }
-command -v m68k-linux-gnu-gcc >/dev/null || { echo "no m68k-linux-gnu-gcc: the lab files were not built" >&2; exit 2; }
+command -v "${M68K_ELF:-m68k-linux-gnu-}gcc" >/dev/null || { echo "no ${M68K_ELF:-m68k-linux-gnu-}gcc: the lab files were not built" >&2; exit 2; }
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 OUT=$tmp/drawer sh "$oe/build-amiga.sh" >"$tmp/build.log" 2>&1 || { cat "$tmp/build.log"; exit 1; }

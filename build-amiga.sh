@@ -15,9 +15,13 @@
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 OUT=${OUT:-"$HERE/build-amiga"}
-CC=${CC:-m68k-linux-gnu-gcc}
-LD=${LD:-m68k-linux-gnu-ld}
-NM=${NM:-m68k-linux-gnu-nm}
+# The m68k ELF tools: M68K_ELF, their prefix (amicradle-stoves' m68kelf-gcc16-open9 stove:
+# STOVES/m68kelf-gcc16-open9/prefix/bin/m68k-linux-gnu-), else Debian/Ubuntu's gcc-m68k-linux-gnu on
+# PATH; CC, LD, NM and OBJCOPY still name one tool each.
+M68K_ELF=${M68K_ELF:-m68k-linux-gnu-}
+CC=${CC:-${M68K_ELF:-m68k-linux-gnu-}gcc}
+LD=${LD:-${M68K_ELF:-m68k-linux-gnu-}ld}
+NM=${NM:-${M68K_ELF:-m68k-linux-gnu-}nm}
 OBJ="$OUT/obj"
 mkdir -p "$OUT/Libs" "$OUT/C" "$OUT/ELF" "$OBJ"
 CFLAGS="-std=gnu11 -m68040 -msoft-float -Os -ffreestanding -fno-builtin -fno-pic -fomit-frame-pointer
@@ -80,7 +84,7 @@ if command -v cargo >/dev/null && [ -d "$(rustc --print sysroot 2>/dev/null)/lib
   "$LD" -r --gc-sections -u _start -e _start "$OBJ/start.o" "$OBJ/shim.o" \
     "$OBJ/rust-target/m68k-unknown-none-elf/release/libopenelf_hello.a" -o "$OBJ/rust-hello.o"
   # without the LLVM bitcode rustc embeds and the symbols no relocation uses
-  "${OBJCOPY:-m68k-linux-gnu-objcopy}" --remove-section=.llvmbc --remove-section=.llvmcmd --strip-unneeded \
+  "${OBJCOPY:-${M68K_ELF:-m68k-linux-gnu-}objcopy}" --remove-section=.llvmbc --remove-section=.llvmcmd --strip-unneeded \
     "$OBJ/rust-hello.o" "$OUT/ELF/rust-hello"
 else
   echo "no cargo with rust-src: ELF/rust-hello not built" >&2
