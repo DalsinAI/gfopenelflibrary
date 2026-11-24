@@ -13,13 +13,13 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 oe=$here/..
 command -v vamos >/dev/null || { echo "skipped: no vamos (pip install amitools==0.8.1 machine68k==0.3.0)"; exit 0; }
-command -v m68k-linux-gnu-gcc >/dev/null || { echo "skipped: no m68k-linux-gnu-gcc"; exit 0; }
+command -v "${M68K_ELF:-m68k-linux-gnu-}gcc" >/dev/null || { echo "skipped: no ${M68K_ELF:-m68k-linux-gnu-}gcc"; exit 0; }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 OUT=$tmp/drawer sh "$oe/build-amiga.sh" > "$tmp/build.log" 2>&1 || { cat "$tmp/build.log"; exit 1; }
 # shared objects DLOpen finds in LIBS:elf/: libouter.so needs libgreet.so,
 # and libcyca.so and libcycb.so need each other
 fx=$oe/tests/fixtures
-so() { m68k-linux-gnu-gcc -m68040 -msoft-float -Os -fPIC -shared -nostdlib -Wl,--hash-style=both -Wl,--build-id=none \
+so() { "${M68K_ELF:-m68k-linux-gnu-}gcc" -m68040 -msoft-float -Os -fPIC -shared -nostdlib -Wl,--hash-style=both -Wl,--build-id=none \
     -Wl,--no-warn-rwx-segments -Wl,-z,max-page-size=16 -Wl,-z,common-page-size=16 -Wl,-z,norelro -Wl,--allow-shlib-undefined -Wl,--no-as-needed "$@"; }
 mkdir -p "$tmp/drawer/Libs/elf"
 cp "$tmp/drawer/ELF/libgreet.so" "$tmp/drawer/Libs/elf/"

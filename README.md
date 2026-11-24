@@ -34,7 +34,7 @@ runs.
 | `rust/fixture`, `tests/` | The tests' fixtures and `test_core.c`. |
 | `tools/mkhunk.py` | An ELF linked at 0 with `-q` as a one-hunk load file: how elf.library itself and the tools are built. |
 | `tests/test_openelf.sh`, `tests/test_openelf_vamos.sh` | The tests (below), run by `.github/workflows/check-openelf.yml`. |
-| `build-amiga.sh` | The drawer: `Libs/elf.library`, `C/ElfHook`, `C/ElfTest`, `ELF/` examples. Needs only `gcc-m68k-linux-gnu` (and Rust with `rust-src` for `ELF/rust-hello`). 68040, soft float, -Os. |
+| `build-amiga.sh` | The drawer: `Libs/elf.library`, `C/ElfHook`, `C/ElfTest`, `ELF/` examples. Needs only an m68k ELF GCC: `M68K_ELF` names its prefix (amicradle-stoves' `m68kelf-gcc16-open9` stove, `.../prefix/bin/m68k-linux-gnu-`), else `gcc-m68k-linux-gnu` on PATH (and Rust with `rust-src` for `ELF/rust-hello`). 68040, soft float, -Os. |
 
 ## The API
 

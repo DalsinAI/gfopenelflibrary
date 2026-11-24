@@ -12,8 +12,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 oe=$here/..
 fx=$oe/tests/fixtures
 tmp=${OPENELF_TMP:-$(mktemp -d)}; [ -n "${OPENELF_TMP:-}" ] || trap 'rm -rf "$tmp"' EXIT; mkdir -p "$tmp"
-cc=${M68K_CC:-m68k-linux-gnu-gcc}
-ld=${M68K_LD:-m68k-linux-gnu-ld}
+cc=${M68K_CC:-${M68K_ELF:-m68k-linux-gnu-}gcc}
+ld=${M68K_LD:-${M68K_ELF:-m68k-linux-gnu-}ld}
 qemu=${QEMU_M68K:-qemu-m68k}
 command -v "$cc" >/dev/null || { echo "skipped: no $cc"; exit 0; }
 F="-m68040 -O2 -ffreestanding -fno-builtin -fno-asynchronous-unwind-tables -fno-unwind-tables
